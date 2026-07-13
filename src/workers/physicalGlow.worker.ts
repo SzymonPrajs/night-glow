@@ -15,6 +15,7 @@ import {
   convolveRingEmissionField,
   createRingConvolutionPlan,
   createRingEmissionField,
+  DEFAULT_RELATIVE_AZIMUTHS_DEG,
   normalizeAtmosphere,
   normalizeRadiativeTransferOptions,
   ringConvolutionPlanCacheKey,
@@ -36,7 +37,9 @@ const kernelCache = new Map<string, AtmosphericKernel>()
 const planCache = new Map<string, RingConvolutionPlan>()
 const MAX_EMISSION_CACHE_ENTRIES = 3
 const MAX_KERNEL_CACHE_ENTRIES = 4
-const MAX_PLAN_CACHE_ENTRIES = 4
+// A full positive FFT plan is intentionally larger than the old truncated
+// harmonic plan; retain only the active atmosphere to bound worker memory.
+const MAX_PLAN_CACHE_ENTRIES = 1
 const cancelled = new Set<number>()
 let latestAnalyzeRequest = 0
 
@@ -158,7 +161,13 @@ async function analyze(request: PhysicalGlowAnalyzeRequest) {
       180 / emission.sectorCount,
     )
     components.kernel = 0.88
-    postProgress(request, weights, components, 'Preparing harmonic transfer plan', 'Compressing the angular kernel into resolved Fourier modes')
+    postProgress(
+      request,
+      weights,
+      components,
+      'Preparing positive angular transfer plan',
+      'Sampling the non-negative kernel onto every bearing and precomputing its FFT',
+    )
     const planKey = ringConvolutionPlanCacheKey(
       kernelResolution.kernel,
       ringDistances,
@@ -167,6 +176,9 @@ async function analyze(request: PhysicalGlowAnalyzeRequest) {
     )
     let plan = lruGet(planCache, planKey)
     if (!plan) {
+      // Drop the previous ~56 MiB half-spectrum before allocating its
+      // replacement so atmosphere changes do not briefly retain two plans.
+      lruMakeRoom(planCache, MAX_PLAN_CACHE_ENTRIES)
       plan = createRingConvolutionPlan(
         kernelResolution.kernel,
         ringDistances,
@@ -182,7 +194,7 @@ async function analyze(request: PhysicalGlowAnalyzeRequest) {
       weights,
       components,
       kernelResolution.cacheHit ? 'Cached atmosphere kernel ready' : 'Atmosphere kernel ready',
-      `${plan.harmonicCount} angular harmonics · ${kernelMs.toFixed(0)} ms`,
+      `${plan.sectorCount} bearing bins · ${plan.fftSize}-point FFT · ${kernelMs.toFixed(0)} ms`,
     )
     await delay(0)
     if (finishIfStale(request)) return
@@ -403,7 +415,7 @@ function makeKernelGrid(ringRadii: ArrayLike<number>, request: PhysicalGlowAnaly
       : lruGet(kernelCache, request.kernel.cacheKey)?.grid.elevationsDeg ?? [0, 2, 5, 10, 15, 20, 30, 45, 60, 75, 90]
   return {
     distancesKm: [...new Set(distanceCandidates.filter((value) => value <= maximumDistance).concat(maximumDistance))].sort((a, b) => a - b),
-    relativeAzimuthsDeg: Array.from({ length: 37 }, (_, index) => index * 5),
+    relativeAzimuthsDeg: DEFAULT_RELATIVE_AZIMUTHS_DEG,
     elevationsDeg: Array.from(requestedElevations, Number),
   }
 }
@@ -463,7 +475,6 @@ function calculateRingContributions(
 ) {
   const ringCount = emission.ringRadiiKm.length
   const elevationCount = plan.elevationsDeg.length
-  const harmonicWidth = plan.harmonicCount + 1
   const ringMeanSpectralRadiance = new Float32Array(ringCount * bandCount)
   for (let ring = 0; ring < ringCount; ring += 1) {
     for (let band = 0; band < bandCount; band += 1) {
@@ -473,8 +484,8 @@ function calculateRingContributions(
       }
       let meanTransfer = 0
       for (let elevation = 0; elevation < elevationCount; elevation += 1) {
-        const index = (((elevation * ringCount + ring) * bandCount + band) * harmonicWidth)
-        meanTransfer += plan.kernelHarmonics[index]
+        const index = ((elevation * ringCount + ring) * bandCount + band)
+        meanTransfer += plan.kernelMeanTransfer[index]
       }
       ringMeanSpectralRadiance[ring * bandCount + band] = Math.max(0, sourceFlux * meanTransfer / elevationCount)
     }
@@ -493,7 +504,6 @@ function calculateComponentContributions(
 ) {
   const ringCount = emission.ringRadiiKm.length
   const elevationCount = plan.elevationsDeg.length
-  const harmonicWidth = plan.harmonicCount + 1
   return (emission.components ?? []).map((component) => {
     const meanSpectralRadiance = new Float32Array(bandCount)
     for (let band = 0; band < bandCount; band += 1) {
@@ -501,8 +511,8 @@ function calculateComponentContributions(
       for (let ring = 0; ring < ringCount; ring += 1) {
         let meanTransfer = 0
         for (let elevation = 0; elevation < elevationCount; elevation += 1) {
-          const index = (((elevation * ringCount + ring) * bandCount + band) * harmonicWidth)
-          meanTransfer += plan.kernelHarmonics[index]
+          const index = ((elevation * ringCount + ring) * bandCount + band)
+          meanTransfer += plan.kernelMeanTransfer[index]
         }
         total += component.ringSpectralFlux[ring * bandCount + band] * meanTransfer / elevationCount
       }
@@ -752,6 +762,14 @@ function lruSet<K, V>(
     const oldestValue = cache.get(oldestKey)
     cache.delete(oldestKey)
     if (oldestValue !== undefined) onEvict?.(oldestValue)
+  }
+}
+
+function lruMakeRoom<K, V>(cache: Map<K, V>, maximumEntries: number) {
+  while (cache.size >= maximumEntries) {
+    const oldestKey = cache.keys().next().value as K | undefined
+    if (oldestKey === undefined) break
+    cache.delete(oldestKey)
   }
 }
 

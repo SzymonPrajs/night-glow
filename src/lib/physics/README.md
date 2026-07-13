@@ -87,22 +87,27 @@ builder's `onProgress(completed, total)` callback is suitable for the analysis
 progress bar.
 
 For repeated map updates, call `createRingConvolutionPlan` once per kernel,
-ring layout, sector count, and elevation list. It precomputes the circular
-kernel as a truncated real Fourier series. With a five-degree kernel the plan
-uses at most 36 angular harmonics even when the map uses 720 half-degree
-sectors. `ringConvolutionPlanCacheKey` can be computed before building it.
+ring layout, sector count, and elevation list. It samples the non-negative
+kernel onto all 720 half-degree bearing bins and caches a zero-padded real FFT.
+`ringConvolutionPlanCacheKey` can be computed before building it.
 
 The fast convolution scales as:
 
 ```text
-O(rings * bands * harmonics * sectors
-  + elevations * bands * harmonics * (rings + sectors))
+O((rings * bands + elevations * bands) * fftSize * log(fftSize)
+  + elevations * rings * bands * fftSize)
 ```
 
-rather than direct `O(elevations * rings * bands * sectors^2)` summation.
-The five-degree kernel resolves at most 36 harmonics; 720 bearings are smooth
-half-degree output samples rather than independent half-degree atmospheric
-resolution. Small negative Fourier ringing is clipped to zero.
+rather than direct `O(elevations * rings * bands * sectors^2)` summation. The
+zero-padded linear convolution is folded back onto the circle, retaining every
+resolved mode without a low-order cutoff. Because both source power and the
+sampled kernel are non-negative, it cannot create detached Gibbs lobes; only
+round-off-sized signed noise remains, and negative values are clamped.
+
+The default 720-bearing plan stores its real half-spectra as `Float32` values
+and occupies about 55.7 MiB. The worker retains one plan and evicts it before
+allocating a replacement, avoiding a two-plan memory spike when the atmosphere
+changes.
 
 ## Minimal use
 

@@ -72,9 +72,21 @@ export const DEFAULT_RADIATIVE_TRANSFER: Readonly<RadiativeTransferOptions> = Ob
   multipleScattering: DEFAULT_MULTIPLE_SCATTERING,
 })
 
+/**
+ * Forward aerosol scattering changes fastest in the first few degrees. This
+ * adaptive grid reaches half-degree resolution there without paying for 361
+ * expensive radiative-transfer paths at every distance and elevation.
+ */
+export const DEFAULT_RELATIVE_AZIMUTHS_DEG = Object.freeze([
+  ...inclusiveRange(0, 10, 0.5),
+  ...inclusiveRange(11, 20, 1),
+  ...inclusiveRange(22.5, 30, 2.5),
+  ...inclusiveRange(35, 180, 5),
+])
+
 export const DEFAULT_KERNEL_GRID: Readonly<KernelGridSpec> = Object.freeze({
   distancesKm: Object.freeze([0.125, 0.5, 1, 2, 4, 8, 16, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1000]),
-  relativeAzimuthsDeg: Object.freeze(Array.from({ length: 37 }, (_, index) => index * 5)),
+  relativeAzimuthsDeg: DEFAULT_RELATIVE_AZIMUTHS_DEG,
   elevationsDeg: Object.freeze([0, 2, 5, 10, 15, 20, 30, 45, 60, 75, 90]),
 })
 
@@ -120,3 +132,10 @@ export const GAUSS_10_WEIGHTS = Object.freeze([
   0.1494513491505806,
   0.0666713443086881,
 ])
+
+function inclusiveRange(start: number, end: number, step: number) {
+  return Array.from(
+    { length: Math.round((end - start) / step) + 1 },
+    (_, index) => start + index * step,
+  )
+}

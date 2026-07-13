@@ -1,8 +1,8 @@
 import { nonNegativeFinite } from './atmosphere'
+import { linearConvolutionFftSize, transformRadix2 } from './fft'
 import { sampleAtmosphericKernel } from './kernel'
 import type {
   AtmosphericKernel,
-  ConvolutionPlanOptions,
   RingConvolutionPlan,
   RingEmissionField,
   SpectralSkyField,
@@ -67,135 +67,115 @@ export function addRingSectorSpectrum(
 }
 
 /**
- * Precomputes the circular-convolution transfer functions for a particular
- * ring layout. The kernel's even relative-azimuth response is represented by
- * a real cosine series up to the angular resolution supported by its grid.
+ * Samples every non-negative angular kernel onto the output bearing grid and
+ * precomputes its real FFT. Zero-padded linear convolution is folded back onto
+ * the circle at solve time, so no truncated Fourier series or negative Gibbs
+ * lobes are introduced.
  */
 export function createRingConvolutionPlan(
   kernel: AtmosphericKernel,
   ringDistancesKm: readonly number[],
   sectorCount: number,
   elevationsDeg: readonly number[] = kernel.grid.elevationsDeg,
-  planOptions: ConvolutionPlanOptions = {},
 ): RingConvolutionPlan {
   const configuration = normalizePlanConfiguration(
     kernel,
     ringDistancesKm,
     sectorCount,
     elevationsDeg,
-    planOptions,
   )
   const {
     rings,
     sectors,
     elevations,
     bandIds,
-    harmonicCount,
   } = configuration
-  const harmonicWidth = harmonicCount + 1
-  const cosineTable = new Float64Array(harmonicWidth * sectors)
-  const sineTable = new Float64Array(harmonicWidth * sectors)
-  for (let harmonic = 0; harmonic <= harmonicCount; harmonic += 1) {
-    const tableBase = harmonic * sectors
-    for (let sector = 0; sector < sectors; sector += 1) {
-      const phase = 2 * Math.PI * harmonic * sector / sectors
-      cosineTable[tableBase + sector] = Math.cos(phase)
-      sineTable[tableBase + sector] = Math.sin(phase)
-    }
-  }
-
   const bandCount = bandIds.length
-  const kernelHarmonics = new Float64Array(
-    elevations.length * rings.length * bandCount * harmonicWidth,
+  const fftSize = linearConvolutionFftSize(sectors)
+  const frequencyBinCount = fftSize / 2 + 1
+  const kernelFrequencySpectrum = new Float32Array(
+    elevations.length * rings.length * bandCount * frequencyBinCount * 2,
   )
-  // Odd oversampling avoids a special Nyquist coefficient and integrates the
-  // piecewise-linear angular kernel much more accurately than its native grid.
-  const angularSampleCount = Math.max(33, 4 * harmonicCount + 1)
-  const quadratureCosines = new Float64Array(harmonicWidth * angularSampleCount)
-  for (let harmonic = 0; harmonic <= harmonicCount; harmonic += 1) {
-    const row = harmonic * angularSampleCount
-    for (let sample = 0; sample < angularSampleCount; sample += 1) {
-      quadratureCosines[row + sample] = Math.cos(2 * Math.PI * harmonic * sample / angularSampleCount)
-    }
-  }
+  const kernelMeanTransfer = new Float32Array(
+    elevations.length * rings.length * bandCount,
+  )
+  const real = new Float64Array(fftSize)
+  const imaginary = new Float64Array(fftSize)
   const spectrum = new Float64Array(bandCount)
-  const coefficients = new Float64Array(bandCount * harmonicWidth)
+  const spatialKernel = new Float64Array(bandCount * sectors)
 
   for (let elevationIndex = 0; elevationIndex < elevations.length; elevationIndex += 1) {
     for (let ringIndex = 0; ringIndex < rings.length; ringIndex += 1) {
-      coefficients.fill(0)
-      for (let sample = 0; sample < angularSampleCount; sample += 1) {
-        const relativeAzimuthDeg = 360 * sample / angularSampleCount
+      for (let sector = 0; sector < sectors; sector += 1) {
         sampleAtmosphericKernel(
           kernel,
           rings[ringIndex],
-          relativeAzimuthDeg,
+          360 * sector / sectors,
           elevations[elevationIndex],
           spectrum,
         )
         for (let bandIndex = 0; bandIndex < bandCount; bandIndex += 1) {
-          const weightedValue = spectrum[bandIndex] / angularSampleCount
-          const coefficientBase = bandIndex * harmonicWidth
-          for (let harmonic = 0; harmonic <= harmonicCount; harmonic += 1) {
-            coefficients[coefficientBase + harmonic] +=
-              weightedValue * quadratureCosines[harmonic * angularSampleCount + sample]
-          }
+          spatialKernel[bandIndex * sectors + sector] = spectrum[bandIndex]
         }
       }
+
       for (let bandIndex = 0; bandIndex < bandCount; bandIndex += 1) {
-        const destination = planHarmonicIndex(
+        real.fill(0)
+        imaginary.fill(0)
+        const spatialBase = bandIndex * sectors
+        for (let sector = 0; sector < sectors; sector += 1) {
+          real[sector] = spatialKernel[spatialBase + sector]
+        }
+        transformRadix2(real, imaginary)
+        const meanIndex = kernelMeanIndex(
           elevationIndex,
           ringIndex,
           bandIndex,
-          0,
           rings.length,
           bandCount,
-          harmonicWidth,
         )
-        const source = bandIndex * harmonicWidth
-        kernelHarmonics.set(coefficients.subarray(source, source + harmonicWidth), destination)
+        kernelMeanTransfer[meanIndex] = real[0] / sectors
+        const frequencyBase = meanIndex * frequencyBinCount * 2
+        for (let frequency = 0; frequency < frequencyBinCount; frequency += 1) {
+          kernelFrequencySpectrum[frequencyBase + frequency * 2] = real[frequency]
+          kernelFrequencySpectrum[frequencyBase + frequency * 2 + 1] = imaginary[frequency]
+        }
       }
     }
   }
 
   return {
-    version: 1,
+    version: 2,
     key: planKey(configuration, kernel.key),
     kernelKey: kernel.key,
     ringDistancesKm: rings,
     elevationsDeg: elevations,
     sectorCount: sectors,
     bandIds,
-    harmonicCount,
-    kernelHarmonics,
-    cosineTable,
-    sineTable,
+    fftSize,
+    frequencyBinCount,
+    kernelFrequencySpectrum,
+    kernelMeanTransfer,
   }
 }
 
-/** Returns the key before doing the comparatively expensive harmonic precomputation. */
+/** Returns the key before doing the comparatively expensive FFT precomputation. */
 export function ringConvolutionPlanCacheKey(
   kernel: AtmosphericKernel,
   ringDistancesKm: readonly number[],
   sectorCount: number,
   elevationsDeg: readonly number[] = kernel.grid.elevationsDeg,
-  planOptions: ConvolutionPlanOptions = {},
 ) {
   const configuration = normalizePlanConfiguration(
     kernel,
     ringDistancesKm,
     sectorCount,
     elevationsDeg,
-    planOptions,
   )
   return planKey(configuration, kernel.key)
 }
 
-/**
- * Fast all-sky convolution. Work scales as O(R B M N + E B M (R + N))
- * instead of the direct O(E R B N^2), where M is normally only 36 for the
- * default five-degree angular kernel.
- */
+/** Fast positive circular convolution using cached kernel FFTs. */
 export function convolveRingEmissionField(
   kernel: AtmosphericKernel,
   field: RingEmissionField,
@@ -215,74 +195,86 @@ export function convolveRingEmissionField(
   const sectorCount = field.sectorCount
   const bandCount = field.bandIds.length
   const elevationCount = plan.elevationsDeg.length
-  const harmonicWidth = plan.harmonicCount + 1
-  const transformLength = ringCount * bandCount * harmonicWidth
-  const sourceReal = new Float64Array(transformLength)
-  const sourceImaginary = new Float64Array(transformLength)
+  const frequencyBinCount = plan.frequencyBinCount
+  const sourceFrequencySpectrum = new Float64Array(
+    ringCount * bandCount * frequencyBinCount * 2,
+  )
+  const real = new Float64Array(plan.fftSize)
+  const imaginary = new Float64Array(plan.fftSize)
 
   for (let ringIndex = 0; ringIndex < ringCount; ringIndex += 1) {
     for (let bandIndex = 0; bandIndex < bandCount; bandIndex += 1) {
-      const transformBase = (ringIndex * bandCount + bandIndex) * harmonicWidth
-      for (let harmonic = 0; harmonic <= plan.harmonicCount; harmonic += 1) {
-        const tableBase = harmonic * sectorCount
-        let real = 0
-        let imaginary = 0
-        for (let sector = 0; sector < sectorCount; sector += 1) {
-          const inputIndex = (ringIndex * sectorCount + sector) * bandCount + bandIndex
-          const power = field.spectralPower[inputIndex]
-          real += power * plan.cosineTable[tableBase + sector]
-          imaginary -= power * plan.sineTable[tableBase + sector]
-        }
-        sourceReal[transformBase + harmonic] = real
-        sourceImaginary[transformBase + harmonic] = imaginary
+      real.fill(0)
+      imaginary.fill(0)
+      for (let sector = 0; sector < sectorCount; sector += 1) {
+        real[sector] = field.spectralPower[
+          (ringIndex * sectorCount + sector) * bandCount + bandIndex
+        ]
       }
-    }
-  }
-
-  const skyTransformLength = elevationCount * bandCount * harmonicWidth
-  const skyReal = new Float64Array(skyTransformLength)
-  const skyImaginary = new Float64Array(skyTransformLength)
-  for (let elevationIndex = 0; elevationIndex < elevationCount; elevationIndex += 1) {
-    for (let bandIndex = 0; bandIndex < bandCount; bandIndex += 1) {
-      const skyBase = (elevationIndex * bandCount + bandIndex) * harmonicWidth
-      for (let harmonic = 0; harmonic <= plan.harmonicCount; harmonic += 1) {
-        let real = 0
-        let imaginary = 0
-        for (let ringIndex = 0; ringIndex < ringCount; ringIndex += 1) {
-          const transfer = plan.kernelHarmonics[planHarmonicIndex(
-            elevationIndex,
-            ringIndex,
-            bandIndex,
-            harmonic,
-            ringCount,
-            bandCount,
-            harmonicWidth,
-          )]
-          const source = (ringIndex * bandCount + bandIndex) * harmonicWidth + harmonic
-          real += transfer * sourceReal[source]
-          imaginary += transfer * sourceImaginary[source]
-        }
-        skyReal[skyBase + harmonic] = real
-        skyImaginary[skyBase + harmonic] = imaginary
+      transformRadix2(real, imaginary)
+      const destinationBase = sourceFrequencyIndex(
+        ringIndex,
+        bandIndex,
+        0,
+        bandCount,
+        frequencyBinCount,
+      )
+      for (let frequency = 0; frequency < frequencyBinCount; frequency += 1) {
+        sourceFrequencySpectrum[destinationBase + frequency * 2] = real[frequency]
+        sourceFrequencySpectrum[destinationBase + frequency * 2 + 1] = imaginary[frequency]
       }
     }
   }
 
   const radiance = new Float32Array(elevationCount * sectorCount * bandCount)
   for (let elevationIndex = 0; elevationIndex < elevationCount; elevationIndex += 1) {
-    for (let sector = 0; sector < sectorCount; sector += 1) {
-      for (let bandIndex = 0; bandIndex < bandCount; bandIndex += 1) {
-        const skyBase = (elevationIndex * bandCount + bandIndex) * harmonicWidth
-        let value = skyReal[skyBase]
-        for (let harmonic = 1; harmonic <= plan.harmonicCount; harmonic += 1) {
-          const tableIndex = harmonic * sectorCount + sector
-          value += 2 * (
-            skyReal[skyBase + harmonic] * plan.cosineTable[tableIndex] -
-            skyImaginary[skyBase + harmonic] * plan.sineTable[tableIndex]
+    for (let bandIndex = 0; bandIndex < bandCount; bandIndex += 1) {
+      real.fill(0)
+      imaginary.fill(0)
+      for (let frequency = 0; frequency < frequencyBinCount; frequency += 1) {
+        let accumulatedReal = 0
+        let accumulatedImaginary = 0
+        for (let ringIndex = 0; ringIndex < ringCount; ringIndex += 1) {
+          const kernelIndex = kernelFrequencyIndex(
+            elevationIndex,
+            ringIndex,
+            bandIndex,
+            frequency,
+            ringCount,
+            bandCount,
+            frequencyBinCount,
           )
+          const sourceIndex = sourceFrequencyIndex(
+            ringIndex,
+            bandIndex,
+            frequency,
+            bandCount,
+            frequencyBinCount,
+          )
+          const kernelReal = plan.kernelFrequencySpectrum[kernelIndex]
+          const kernelImaginary = plan.kernelFrequencySpectrum[kernelIndex + 1]
+          const sourceReal = sourceFrequencySpectrum[sourceIndex]
+          const sourceImaginary = sourceFrequencySpectrum[sourceIndex + 1]
+          accumulatedReal += kernelReal * sourceReal - kernelImaginary * sourceImaginary
+          accumulatedImaginary += kernelReal * sourceImaginary + kernelImaginary * sourceReal
         }
+        real[frequency] = accumulatedReal
+        imaginary[frequency] = frequency === 0 || frequency === plan.fftSize / 2
+          ? 0
+          : accumulatedImaginary
+        const mirror = plan.fftSize - frequency
+        if (frequency > 0 && mirror !== frequency) {
+          real[mirror] = accumulatedReal
+          imaginary[mirror] = -accumulatedImaginary
+        }
+      }
+      transformRadix2(real, imaginary, true)
+      for (let sector = 0; sector < sectorCount; sector += 1) {
+        const wrappedTail = sector + sectorCount < sectorCount * 2 - 1
+          ? real[sector + sectorCount]
+          : 0
         radiance[(elevationIndex * sectorCount + sector) * bandCount + bandIndex] =
-          nonNegativeFinite(value)
+          nonNegativeFinite(real[sector] + wrappedTail)
       }
     }
   }
@@ -299,16 +291,37 @@ export function convolveRingEmissionField(
   }
 }
 
-function planHarmonicIndex(
+function kernelFrequencyIndex(
   elevationIndex: number,
   ringIndex: number,
   bandIndex: number,
-  harmonic: number,
+  frequency: number,
   ringCount: number,
   bandCount: number,
-  harmonicWidth: number,
+  frequencyBinCount: number,
 ) {
-  return (((elevationIndex * ringCount + ringIndex) * bandCount + bandIndex) * harmonicWidth + harmonic)
+  return ((((elevationIndex * ringCount + ringIndex) * bandCount + bandIndex) *
+    frequencyBinCount + frequency) * 2)
+}
+
+function sourceFrequencyIndex(
+  ringIndex: number,
+  bandIndex: number,
+  frequency: number,
+  bandCount: number,
+  frequencyBinCount: number,
+) {
+  return (((ringIndex * bandCount + bandIndex) * frequencyBinCount + frequency) * 2)
+}
+
+function kernelMeanIndex(
+  elevationIndex: number,
+  ringIndex: number,
+  bandIndex: number,
+  ringCount: number,
+  bandCount: number,
+) {
+  return ((elevationIndex * ringCount + ringIndex) * bandCount + bandIndex)
 }
 
 function normalizePlanConfiguration(
@@ -316,7 +329,6 @@ function normalizePlanConfiguration(
   ringDistancesKm: readonly number[],
   sectorCount: number,
   elevationsDeg: readonly number[],
-  planOptions: ConvolutionPlanOptions,
 ) {
   const rings = normalizeRingDistances(ringDistancesKm)
   const sectors = normalizeSectorCount(sectorCount)
@@ -328,26 +340,15 @@ function normalizePlanConfiguration(
   })
   if (!elevations.length) throw new Error('At least one convolution elevation is required')
   const bandIds = normalizeBandIds(kernel.bands.map((band) => band.id))
-  const maximumGap = kernel.grid.relativeAzimuthsDeg.reduce(
-    (gap, value, index, values) => index === 0 ? gap : Math.max(gap, value - values[index - 1]),
-    0,
-  )
-  const angularNyquist = maximumGap > 0 ? Math.floor(180 / maximumGap) : 0
-  const sectorNyquist = Math.floor((sectors - 1) / 2)
-  const requested = planOptions.maxHarmonics ?? angularNyquist
-  if (!Number.isFinite(requested) || requested < 0) {
-    throw new Error('Maximum harmonic count must be finite and non-negative')
-  }
-  const harmonicCount = Math.min(Math.floor(requested), angularNyquist, sectorNyquist)
-  return { rings, sectors, elevations, bandIds, harmonicCount }
+  return { rings, sectors, elevations, bandIds, convolution: 'positive-real-fft-v2' as const }
 }
 
 function planKey(
   configuration: ReturnType<typeof normalizePlanConfiguration>,
   kernelKey: string,
 ) {
-  const description = JSON.stringify({ version: 1, kernelKey, ...configuration })
-  return `ring-convolution-v1-${fnv1a(description)}`
+  const description = JSON.stringify({ version: 2, kernelKey, ...configuration })
+  return `ring-convolution-v2-${fnv1a(description)}`
 }
 
 function validateField(kernel: AtmosphericKernel, field: RingEmissionField) {
@@ -366,7 +367,7 @@ function validatePlan(
   elevationsDeg: readonly number[],
   plan: RingConvolutionPlan,
 ) {
-  if (plan.version !== 1 || plan.kernelKey !== kernel.key) {
+  if (plan.version !== 2 || plan.kernelKey !== kernel.key) {
     throw new Error('Convolution plan was built for a different atmospheric kernel')
   }
   if (plan.sectorCount !== field.sectorCount) {
@@ -375,13 +376,13 @@ function validatePlan(
   assertSameNumbers(plan.ringDistancesKm, field.ringDistancesKm, 'convolution plan and emission rings')
   assertSameNumbers(plan.elevationsDeg, elevationsDeg, 'convolution plan and requested elevations')
   assertSameStrings(plan.bandIds, field.bandIds, 'convolution plan and emission bands')
-  const harmonicWidth = plan.harmonicCount + 1
-  const expectedHarmonics =
-    plan.elevationsDeg.length * plan.ringDistancesKm.length * plan.bandIds.length * harmonicWidth
-  if (plan.kernelHarmonics.length !== expectedHarmonics) throw new Error('Invalid convolution plan harmonics')
-  if (plan.cosineTable.length !== harmonicWidth * plan.sectorCount ||
-      plan.sineTable.length !== harmonicWidth * plan.sectorCount) {
-    throw new Error('Invalid convolution plan trigonometric tables')
+  const expectedMeans = plan.elevationsDeg.length * plan.ringDistancesKm.length * plan.bandIds.length
+  const expectedSpectrum = expectedMeans * plan.frequencyBinCount * 2
+  if (plan.fftSize !== linearConvolutionFftSize(plan.sectorCount) ||
+      plan.frequencyBinCount !== plan.fftSize / 2 + 1 ||
+      plan.kernelMeanTransfer.length !== expectedMeans ||
+      plan.kernelFrequencySpectrum.length !== expectedSpectrum) {
+    throw new Error('Invalid convolution plan frequency spectrum')
   }
 }
 

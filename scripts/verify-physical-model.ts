@@ -15,6 +15,8 @@ import {
   convolveRingEmissionField,
   createRingConvolutionPlan,
   createRingEmissionField,
+  DEFAULT_RELATIVE_AZIMUTHS_DEG,
+  sampleAtmosphericKernel,
 } from '../src/lib/physics'
 import type { EllipseEmissionSource, EmissionGrid } from '../src/lib/emission'
 import { buildPhysicalGlowRenderGrid } from '../src/lib/physicalGlowRender'
@@ -79,6 +81,11 @@ const field = createRingEmissionField(
 const planStarted = performance.now()
 const plan = createRingConvolutionPlan(kernel, field.ringDistancesKm, field.sectorCount)
 const planMs = performance.now() - planStarted
+assert.equal(plan.version, 2)
+assert.equal(plan.fftSize, 2048)
+assert.equal(DEFAULT_RELATIVE_AZIMUTHS_DEG[1], 0.5)
+const fftDirectError = verifyFftAgainstDirectConvolution(kernel)
+assert(fftDirectError < 2e-5, `FFT convolution must match direct circular summation; error was ${fftDirectError}`)
 const solveStarted = performance.now()
 const sky = convolveRingEmissionField(kernel, field, undefined, plan)
 const solveMs = performance.now() - solveStarted
@@ -87,6 +94,17 @@ assertFiniteNonNegative(sky.radiance, 'Lodz sky radiance')
 const peakBearing = broadbandPeakBearing(sky.radiance, 0, sky.azimuthsDeg)
 assert(angularDistance(peakBearing, expectedBearing) < 2,
   `Glow peak ${peakBearing.toFixed(1)} degrees must follow Lodz at ${expectedBearing.toFixed(1)} degrees`)
+const detachedHorizonLobes = countDetachedBroadbandPeaks(
+  sky.radiance,
+  0,
+  sky.azimuthsDeg.length,
+  SPECTRAL_BANDS.length,
+  0.001,
+  15,
+)
+assert.equal(detachedHorizonLobes, 0, 'Positive convolution must not introduce detached Lodz side lobes')
+const dcError = angularMeanConservationError(sky.radiance, field, plan, 0)
+assert(dcError < 2e-6, `Circular convolution must preserve angular mean; error was ${dcError}`)
 
 const regionalField = createRingEmissionField(
   field.ringDistancesKm,
@@ -121,9 +139,9 @@ const shiftedField = createRingEmissionField(
   field.azimuthOffsetDeg,
 )
 const shiftedSky = convolveRingEmissionField(kernel, shiftedField, undefined, plan)
-const rotationError = maximumRotationError(sky.radiance, shiftedSky.radiance, sky.elevationsDeg.length,
+const rotationError = normalizedRotationL1Error(sky.radiance, shiftedSky.radiance, sky.elevationsDeg.length,
   field.sectorCount, field.bandIds.length, sectorShift)
-assert(rotationError < 2e-5, `A rotated source field must rotate the sky; error was ${rotationError}`)
+assert(rotationError < 2e-7, `A rotated source field must rotate the sky; error was ${rotationError}`)
 
 const farBearing = 70
 const farSource: EllipseEmissionSource = {
@@ -205,6 +223,9 @@ const result = {
   invariants: {
     linearityError,
     rotationError,
+    angularMeanConservationError: dcError,
+    fftDirectConvolutionError: fftDirectError,
+    detachedLodzHorizonLobes: detachedHorizonLobes,
     farCityDistanceKm: 600,
     farCityRadianceAt20Deg: farHighAtmosphereRadiance,
     fullRegionalLodzToOppositeRatio: lodzLobe / oppositeLobe,
@@ -217,7 +238,7 @@ const result = {
   performanceMs: {
     emission: emissionMs,
     kernel: kernelMs,
-    harmonicPlan: planMs,
+    fftPlan: planMs,
     fullSkyConvolution: solveMs,
   },
 }
@@ -327,7 +348,7 @@ function maximumScaledError(reference: Float32Array, scaled: Float32Array, scale
   return maximum
 }
 
-function maximumRotationError(
+function normalizedRotationL1Error(
   reference: Float32Array,
   rotated: Float32Array,
   elevations: number,
@@ -335,18 +356,115 @@ function maximumRotationError(
   bands: number,
   shift: number,
 ) {
-  let maximum = 0
+  let difference = 0
+  let total = 0
   for (let elevation = 0; elevation < elevations; elevation += 1) {
     for (let sector = 0; sector < sectors; sector += 1) {
       const shiftedSector = (sector + shift) % sectors
       for (let band = 0; band < bands; band += 1) {
         const expected = reference[(elevation * sectors + sector) * bands + band]
         const actual = rotated[(elevation * sectors + shiftedSector) * bands + band]
-        maximum = Math.max(maximum, Math.abs(actual - expected) / Math.max(1e-12, Math.abs(expected)))
+        difference += Math.abs(actual - expected)
+        total += Math.abs(expected)
       }
     }
   }
-  return maximum
+  return difference / Math.max(1e-20, total)
+}
+
+function countDetachedBroadbandPeaks(
+  values: Float32Array,
+  elevation: number,
+  sectors: number,
+  bands: number,
+  relativeThreshold: number,
+  exclusionRadiusDeg: number,
+) {
+  const samples = Array.from(
+    { length: sectors },
+    (_, sector) => broadbandAt(values, elevation, sector, bands, sectors),
+  )
+  const peak = Math.max(...samples)
+  const peakSector = samples.indexOf(peak)
+  const threshold = peak * relativeThreshold
+  let peaks = 0
+  for (let sector = 0; sector < sectors; sector += 1) {
+    const sectorDistance = Math.min(
+      Math.abs(sector - peakSector),
+      sectors - Math.abs(sector - peakSector),
+    ) * 360 / sectors
+    if (sectorDistance <= exclusionRadiusDeg) continue
+    const previous = samples[(sector + sectors - 1) % sectors]
+    const current = samples[sector]
+    const next = samples[(sector + 1) % sectors]
+    if (current >= threshold && current > previous && current >= next) peaks += 1
+  }
+  return peaks
+}
+
+function angularMeanConservationError(
+  skyRadiance: Float32Array,
+  source: ReturnType<typeof createRingEmissionField>,
+  convolutionPlan: ReturnType<typeof createRingConvolutionPlan>,
+  elevation: number,
+) {
+  const sectors = source.sectorCount
+  const bands = source.bandIds.length
+  const rings = source.ringDistancesKm.length
+  let expected = 0
+  for (let ring = 0; ring < rings; ring += 1) {
+    for (let band = 0; band < bands; band += 1) {
+      let sourceFlux = 0
+      for (let sector = 0; sector < sectors; sector += 1) {
+        sourceFlux += source.spectralPower[(ring * sectors + sector) * bands + band]
+      }
+      const meanIndex = ((elevation * rings + ring) * bands + band)
+      expected += sourceFlux * convolutionPlan.kernelMeanTransfer[meanIndex]
+    }
+  }
+  let actual = 0
+  for (let sector = 0; sector < sectors; sector += 1) {
+    actual += broadbandAt(skyRadiance, elevation, sector, bands, sectors)
+  }
+  actual /= sectors
+  return Math.abs(actual - expected) / Math.max(1e-20, Math.abs(expected))
+}
+
+function verifyFftAgainstDirectConvolution(kernel: ReturnType<typeof buildAtmosphericKernel>) {
+  const sectors = 8
+  const sourceSector = sectors - 1
+  const bands = kernel.bands.length
+  const sourceSpectrum = Float64Array.from({ length: bands }, (_, band) => 1 + band * 0.125)
+  const power = new Float64Array(sectors * bands)
+  power.set(sourceSpectrum, sourceSector * bands)
+  const fixture = createRingEmissionField(
+    [48],
+    sectors,
+    kernel.bands.map((band) => band.id),
+    power,
+    360 / sectors / 2,
+  )
+  const fixturePlan = createRingConvolutionPlan(kernel, [48], sectors, [0])
+  const fixtureSky = convolveRingEmissionField(kernel, fixture, [0], fixturePlan)
+  const sampledKernel = new Float64Array(bands)
+  let difference = 0
+  let total = 0
+  for (let sector = 0; sector < sectors; sector += 1) {
+    sampleAtmosphericKernel(
+      kernel,
+      48,
+      (sector - sourceSector) * 360 / sectors,
+      0,
+      sampledKernel,
+    )
+    for (let band = 0; band < bands; band += 1) {
+      const expected = sourceSpectrum[band] * sampledKernel[band]
+      const actual = fixtureSky.radiance[sector * bands + band]
+      difference += Math.abs(actual - expected)
+      total += Math.abs(expected)
+    }
+  }
+  return difference / Math.max(1e-20, total)
 }
 
 function assertFiniteNonNegative(values: Float32Array, label: string) {

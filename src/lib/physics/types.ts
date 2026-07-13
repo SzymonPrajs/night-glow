@@ -130,21 +130,17 @@ export type SpectralSkyField = {
 }
 
 export type RingConvolutionPlan = {
-  version: 1
+  version: 2
   key: string
   kernelKey: string
   ringDistancesKm: readonly number[]
   elevationsDeg: readonly number[]
   sectorCount: number
   bandIds: readonly string[]
-  harmonicCount: number
-  /** Cosine-series transfer coefficients: [elevation][ring][band][harmonic]. */
-  kernelHarmonics: Float64Array
-  /** Reusable trigonometric tables: [harmonic][azimuth sector]. */
-  cosineTable: Float64Array
-  sineTable: Float64Array
-}
-
-export type ConvolutionPlanOptions = {
-  maxHarmonics?: number
+  fftSize: number
+  frequencyBinCount: number
+  /** Half-spectrum layout: [elevation][ring][band][frequency][real, imaginary]. */
+  kernelFrequencySpectrum: Float32Array
+  /** Mean angular transfer layout: [elevation][ring][band]. */
+  kernelMeanTransfer: Float32Array
 }
