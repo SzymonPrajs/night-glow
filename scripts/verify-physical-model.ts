@@ -11,6 +11,7 @@ import {
 } from '../src/lib/emission'
 import {
   buildAtmosphericKernel,
+  buildAtmosphericKernelAsync,
   convolveRingEmissionField,
   createRingConvolutionPlan,
   createRingEmissionField,
@@ -49,6 +50,7 @@ const field = createRingEmissionField(
   SECTOR_COUNT,
   SPECTRAL_BANDS.map((band) => band.id),
   lodzGrid.values,
+  180 / SECTOR_COUNT,
 )
 const planStarted = performance.now()
 const plan = createRingConvolutionPlan(kernel, field.ringDistancesKm, field.sectorCount)
@@ -62,11 +64,25 @@ const peakBearing = broadbandPeakBearing(sky.radiance, 0, sky.azimuthsDeg)
 assert(angularDistance(peakBearing, expectedBearing) < 2,
   `Glow peak ${peakBearing.toFixed(1)} degrees must follow Lodz at ${expectedBearing.toFixed(1)} degrees`)
 
+const regionalField = createRingEmissionField(
+  field.ringDistancesKm,
+  field.sectorCount,
+  field.bandIds,
+  regionalGrid.values,
+  field.azimuthOffsetDeg,
+)
+const regionalSky = convolveRingEmissionField(kernel, regionalField, undefined, plan)
+const lodzLobe = meanBroadbandBetween(regionalSky.radiance, regionalSky.azimuthsDeg, 40, 70)
+const oppositeLobe = meanBroadbandBetween(regionalSky.radiance, regionalSky.azimuthsDeg, 220, 250)
+assert(lodzLobe > oppositeLobe * 20,
+  'The full regional field must retain a dominant northeast Lodz lobe')
+
 const doubledField = createRingEmissionField(
   field.ringDistancesKm,
   field.sectorCount,
   field.bandIds,
   Float64Array.from(field.spectralPower, (value) => value * 2),
+  field.azimuthOffsetDeg,
 )
 const doubledSky = convolveRingEmissionField(kernel, doubledField, undefined, plan)
 const linearityError = maximumScaledError(sky.radiance, doubledSky.radiance, 2)
@@ -78,6 +94,7 @@ const shiftedField = createRingEmissionField(
   field.sectorCount,
   field.bandIds,
   rotateSectors(field.spectralPower, field.ringDistancesKm.length, field.sectorCount, field.bandIds.length, sectorShift),
+  field.azimuthOffsetDeg,
 )
 const shiftedSky = convolveRingEmissionField(kernel, shiftedField, undefined, plan)
 const rotationError = maximumRotationError(sky.radiance, shiftedSky.radiance, sky.elevationsDeg.length,
@@ -105,12 +122,42 @@ const farField = createRingEmissionField(
   field.sectorCount,
   field.bandIds,
   farGrid.values,
+  field.azimuthOffsetDeg,
 )
 const farSky = convolveRingEmissionField(kernel, farField, undefined, plan)
 const farHighAtmosphereRadiance = broadbandAt(farSky.radiance, farSky.elevationsDeg.indexOf(20),
   Math.round(farBearing / (360 / SECTOR_COUNT)), SPECTRAL_BANDS.length, SECTOR_COUNT)
 assert(farHighAtmosphereRadiance > 0,
   'A bright city at 600 km must retain a finite high-atmosphere scattered contribution')
+
+const cardinalPeakErrors = cardinalFixtures().map((fixture) => {
+  const grid = buildEmissionGrid({ observer, sources: [fixture.source] })
+  const cardinalField = createRingEmissionField(
+    field.ringDistancesKm,
+    field.sectorCount,
+    field.bandIds,
+    grid.values,
+    field.azimuthOffsetDeg,
+  )
+  const cardinalSky = convolveRingEmissionField(kernel, cardinalField, undefined, plan)
+  const peak = broadbandPeakBearing(cardinalSky.radiance, 0, cardinalSky.azimuthsDeg)
+  const error = angularDistance(peak, fixture.expectedBearing)
+  assert(error < 3, `${fixture.name} fixture peaked at ${peak.toFixed(1)} degrees`)
+  return { name: fixture.name, peakBearingDeg: peak, errorDeg: error }
+})
+
+let cancellationChecks = 0
+await assert.rejects(
+  buildAtmosphericKernelAsync({}, {
+    distancesKm: [1, 10],
+    relativeAzimuthsDeg: [0, 30, 60, 90, 120, 150, 180],
+    elevationsDeg: [0, 10, 30],
+  }, {
+    yieldEvery: 16,
+    shouldCancel: () => ++cancellationChecks > 1,
+  }),
+  /cancelled/,
+)
 
 const result = {
   observer,
@@ -136,6 +183,9 @@ const result = {
     rotationError,
     farCityDistanceKm: 600,
     farCityRadianceAt20Deg: farHighAtmosphereRadiance,
+    fullRegionalLodzToOppositeRatio: lodzLobe / oppositeLobe,
+    cardinalPeakErrors,
+    asyncKernelCancellationChecks: cancellationChecks,
     finiteNonNegative: true,
   },
   performanceMs: {
@@ -176,6 +226,49 @@ function broadbandPeakBearing(radiance: Float32Array, elevationIndex: number, az
     }
   }
   return azimuths[peakIndex]
+}
+
+function meanBroadbandBetween(
+  radiance: Float32Array,
+  azimuths: readonly number[],
+  minimumBearing: number,
+  maximumBearing: number,
+) {
+  let total = 0
+  let samples = 0
+  for (let sector = 0; sector < azimuths.length; sector += 1) {
+    if (azimuths[sector] < minimumBearing || azimuths[sector] > maximumBearing) continue
+    total += broadbandAt(radiance, 0, sector, SPECTRAL_BANDS.length, azimuths.length)
+    samples += 1
+  }
+  return total / Math.max(1, samples)
+}
+
+function cardinalFixtures() {
+  const spectrum = normalizedSpectralFlux(100, [0.055, 0.09, 0.115, 0.145, 0.17, 0.21, 0.13, 0.085])
+  const fixture = (name: string, expectedBearing: number, center: { lat: number; lon: number }) => ({
+    name,
+    expectedBearing,
+    source: {
+      id: `cardinal-${name}`,
+      name,
+      component: 'test',
+      coverageId: `test:${name}`,
+      evidence: 'built-population-proxy' as const,
+      spectralFlux: spectrum,
+      geometry: 'ellipse' as const,
+      center,
+      semiMajorKm: 1,
+      semiMinorKm: 1,
+      rotationDeg: 0,
+    },
+  })
+  return [
+    fixture('north', 0, { lat: observer.lat + 0.25, lon: observer.lon }),
+    fixture('east', 90, { lat: observer.lat, lon: observer.lon + 0.4 }),
+    fixture('south', 180, { lat: observer.lat - 0.25, lon: observer.lon }),
+    fixture('west', 270, { lat: observer.lat, lon: observer.lon - 0.4 }),
+  ]
 }
 
 function broadbandAt(values: Float32Array, elevation: number, sector: number, bands: number, sectors: number) {

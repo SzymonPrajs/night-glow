@@ -203,6 +203,7 @@ export default function App() {
               <DataStatus analysis={analysis} physicalGlow={physicalGlow} />
             </div>
             <SurveyProgress analysis={analysis} physicalGlow={physicalGlow} />
+            <SolverTimings physicalGlow={physicalGlow} />
             <div className="analysis-grid">
               <div><strong>{physicalGlow.emissionDiagnostics?.rings.length ?? 81}</strong><span>distance rings</span></div>
               <div><strong>{physicalGlow.result?.azimuthCount ?? 720}</strong><span>bearings</span></div>
@@ -402,6 +403,24 @@ function SurveyProgress({ analysis, physicalGlow }: { analysis: MapAnalysis; phy
   )
 }
 
+function SolverTimings({ physicalGlow }: { physicalGlow: PhysicalGlowAnalysisState }) {
+  const timings = physicalGlow.result?.timings
+  if (!timings) return null
+  const entries = [
+    ['grid', physicalGlow.emissionBuildMs ?? 0],
+    ['kernel', timings.kernelMs],
+    ['sky', timings.propagationMs],
+    ['checks', timings.diagnosticsMs],
+  ] as const
+  return (
+    <div className="solver-timings" aria-label="Solver timing breakdown">
+      {entries.map(([label, milliseconds]) => (
+        <span key={label}><i>{label}</i><strong>{milliseconds < 10 ? milliseconds.toFixed(1) : milliseconds.toFixed(0)} ms</strong></span>
+      ))}
+    </div>
+  )
+}
+
 function RadianceBreakdown({ physicalGlow }: { physicalGlow: PhysicalGlowAnalysisState }) {
   const result = physicalGlow.result
   const rings = physicalGlow.emissionDiagnostics?.rings
@@ -425,9 +444,19 @@ function RadianceBreakdown({ physicalGlow }: { physicalGlow: PhysicalGlowAnalysi
     return { ...group, radiance }
   })
   const total = groups.reduce((sum, group) => sum + group.radiance, 0)
+  const sourceLayers = result.componentContributions.map((component) => ({
+    id: component.id,
+    label: component.label ?? component.id,
+    radiance: luminance(
+      component.meanRgbRadiance[0],
+      component.meanRgbRadiance[1],
+      component.meanRgbRadiance[2],
+    ),
+  })).filter((component) => component.radiance > 0)
+  const sourceLayerTotal = sourceLayers.reduce((sum, component) => sum + component.radiance, 0)
   return (
     <div className="radiance-breakdown">
-      <div className="breakdown-heading"><span>Glow by distance</span><strong>{(result.diagnostics.outerTailFractionEstimate * 100).toFixed(1)}% outer tail</strong></div>
+      <div className="breakdown-heading"><span>Glow by distance</span><strong>{(result.diagnostics.distantContributionFraction * 100).toFixed(1)}% beyond 300 km</strong></div>
       {groups.map((group) => {
         const fraction = total > 0 ? group.radiance / total : 0
         return (
@@ -438,6 +467,21 @@ function RadianceBreakdown({ physicalGlow }: { physicalGlow: PhysicalGlowAnalysi
           </div>
         )
       })}
+      {sourceLayers.length > 0 && (
+        <>
+          <div className="breakdown-heading source-heading"><span>Glow by source layer</span><strong>{sourceLayers.length}</strong></div>
+          {sourceLayers.map((component) => {
+            const fraction = sourceLayerTotal > 0 ? component.radiance / sourceLayerTotal : 0
+            return (
+              <div className="radiance-row source-layer-row" key={component.id}>
+                <span title={component.label}>{component.label}</span>
+                <i><b style={{ width: `${fraction * 100}%` }} /></i>
+                <strong>{Math.round(fraction * 100)}%</strong>
+              </div>
+            )
+          })}
+        </>
+      )}
       <div className="model-badges">
         <span>Rayleigh</span><span>Aerosol</span><span>Cloud</span><span>Multiple scatter</span>
       </div>

@@ -19,7 +19,7 @@ export function samplePhysicalGlow(
   elevationDeg: number,
 ): DirectionalGlowSample {
   if (!field || field.azimuthCount < 1 || field.elevationDeg.length < 1) return ZERO_SAMPLE
-  const azimuth = normalizeDegrees(azimuthDeg) / 360 * field.azimuthCount
+  const azimuth = normalizeDegrees(azimuthDeg - field.azimuthOffsetDeg) / 360 * field.azimuthCount
   const azimuth0 = Math.floor(azimuth) % field.azimuthCount
   const azimuth1 = (azimuth0 + 1) % field.azimuthCount
   const azimuthMix = azimuth - Math.floor(azimuth)

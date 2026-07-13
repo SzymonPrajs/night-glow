@@ -65,6 +65,24 @@ export function sectorIndexForBearing(bearingDeg: number) {
   return Math.min(SECTOR_COUNT - 1, Math.floor(normalizeBearing(bearingDeg) / SECTOR_WIDTH_DEG))
 }
 
+/**
+ * Conservatively splats a bearing between adjacent half-degree cell centres.
+ * Sector zero is centred at 0.25 degrees and the wrap at north is periodic.
+ */
+export function sectorWeightsForBearing(bearingDeg: number) {
+  const coordinate = normalizeBearing(bearingDeg) / SECTOR_WIDTH_DEG - 0.5
+  const lowerUnwrapped = Math.floor(coordinate)
+  const upperWeight = coordinate - lowerUnwrapped
+  const lowerIndex = ((lowerUnwrapped % SECTOR_COUNT) + SECTOR_COUNT) % SECTOR_COUNT
+  const upperIndex = (lowerIndex + 1) % SECTOR_COUNT
+  return upperWeight <= 1e-12
+    ? [{ index: lowerIndex, weight: 1 }]
+    : [
+        { index: lowerIndex, weight: 1 - upperWeight },
+        { index: upperIndex, weight: upperWeight },
+      ]
+}
+
 export function ringIndexForDistance(distanceKm: number) {
   if (!Number.isFinite(distanceKm) || distanceKm < 0 || distanceKm >= MAX_DISTANCE_KM) return -1
   let low = 0

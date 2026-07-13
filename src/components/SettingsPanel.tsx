@@ -52,7 +52,7 @@ export default function SettingsPanel({ atmosphere, onChange }: SettingsPanelPro
       <div className="sliders">
         <Slider
           icon={<Wind size={15} />}
-          label="Aerosol optical depth"
+          label="Reference AOD (550 nm)"
           value={atmosphere.aerosol}
           display={atmosphere.aerosol.toFixed(2)}
           min={0.02}
@@ -166,7 +166,7 @@ export default function SettingsPanel({ atmosphere, onChange }: SettingsPanelPro
         />
         <Slider
           icon={<Layers3 size={15} />}
-          label="Scattering orders"
+          label="Explicit scatter orders"
           value={atmosphere.maxScatteringOrder}
           display={`${atmosphere.maxScatteringOrder}`}
           min={1}
@@ -178,7 +178,7 @@ export default function SettingsPanel({ atmosphere, onChange }: SettingsPanelPro
 
       <div className="model-note">
         <Sparkles size={15} />
-        <span>Every control feeds the spectral transfer kernel. Humidity changes aerosol optics; clouds can brighten local light while extinguishing distant light.</span>
+        <span>AOD is the dry/reference-humidity baseline. Humidity applies hygroscopic growth; clouds can brighten local light while extinguishing distant light. The remaining bounded scatter tail is closed analytically.</span>
       </div>
     </>
   )

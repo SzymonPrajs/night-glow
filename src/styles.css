@@ -235,6 +235,11 @@ button { color: inherit; }
 .analysis-progress-components > div.complete { color: #83a996; }
 .analysis-progress-components > div.complete > i b { background: #67b78b; }
 .analysis-progress-detail { margin: 7px 0 0; color: #65768c; font-size: 7px; line-height: 1.35; }
+.solver-timings { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: 8px; }
+.solver-timings span { min-width: 0; padding: 4px 3px; border: 1px solid rgba(128, 178, 226, .08); border-radius: 4px; background: rgba(39, 72, 105, .06); text-align: center; }
+.solver-timings i, .solver-timings strong { display: block; overflow: hidden; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.solver-timings i { color: #60758d; font-size: 6px; letter-spacing: .05em; text-transform: uppercase; }
+.solver-timings strong { margin-top: 2px; color: #8da5bf; font-family: 'DM Mono', monospace; font-size: 6px; font-weight: 400; }
 
 .analysis-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
 .analysis-grid > div { display: flex; flex-direction: column; gap: 3px; padding: 0 8px; border-right: 1px solid rgba(178, 205, 235, .1); }
@@ -251,6 +256,10 @@ button { color: inherit; }
 .radiance-row > i { height: 3px; overflow: hidden; border-radius: 3px; background: rgba(151, 180, 211, .1); }
 .radiance-row > i b { display: block; height: 100%; min-width: 1px; border-radius: inherit; background: linear-gradient(90deg, #d28b5b, #e5b274); box-shadow: 0 0 6px rgba(223, 156, 94, .25); }
 .radiance-row strong { font-family: 'DM Mono', monospace; font-size: 7px; font-weight: 400; text-align: right; }
+.source-heading { margin-top: 10px; }
+.source-layer-row { grid-template-columns: minmax(82px, 1.25fr) 1fr 25px; }
+.source-layer-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.source-layer-row > i b { background: linear-gradient(90deg, #6ca7c4, #83c6b1); box-shadow: 0 0 6px rgba(102, 188, 171, .2); }
 .model-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 9px; }
 .model-badges span { padding: 3px 5px; border: 1px solid rgba(128, 178, 226, .12); border-radius: 4px; background: rgba(75, 126, 174, .06); color: #708aa4; font-size: 6px; letter-spacing: .04em; text-transform: uppercase; }
 

@@ -77,10 +77,15 @@ export function usePhysicalGlow(
         setState((current) => ({
           ...current,
           status: 'loading',
-          progress: message.overall * 100,
+          progress: Math.max(current.progress, message.overall * 100),
           stage: message.stage,
           detail: message.detail,
-          components: message.components,
+          components: {
+            emission: Math.max(current.components.emission, message.components.emission),
+            kernel: Math.max(current.components.kernel, message.components.kernel),
+            propagation: Math.max(current.components.propagation, message.components.propagation),
+            diagnostics: Math.max(current.components.diagnostics, message.components.diagnostics),
+          },
           weights: message.weights,
           error: undefined,
         }))
@@ -94,7 +99,7 @@ export function usePhysicalGlow(
           status: 'live',
           progress: 100,
           stage: 'Physical sky field ready',
-          detail: `${message.result.timings.totalMs.toFixed(0)} ms · ${Math.round(message.result.confidence.overall * 100)}% confidence`,
+          detail: `${message.result.timings.totalMs.toFixed(0)} ms · ${message.result.diagnostics.kernelCacheHit ? 'cached' : 'new'} kernel · ${message.result.diagnostics.nonFiniteCount + message.result.diagnostics.negativeCount} invalid`,
           components: { emission: 1, kernel: 1, propagation: 1, diagnostics: 1 },
           result: message.result,
           error: undefined,
@@ -174,10 +179,9 @@ export function usePhysicalGlow(
             debounceMs: 80,
             progressWeights: DEFAULT_WEIGHTS,
             naturalSkyRadianceRgb: [0.0016, 0.002, 0.0032],
-            darkSkyMagnitudePerArcsec2: 21.92,
             darkSkyLimitingMagnitude: 7.15,
             limitingMagnitudeSlope: 1.18,
-            estimateConvergence: true,
+            estimateOuterBoundary: true,
           },
         }
         const transfer = protocolGrid ? transferableBuffers(protocolGrid) : []

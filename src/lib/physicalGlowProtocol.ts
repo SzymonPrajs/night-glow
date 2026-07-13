@@ -107,10 +107,9 @@ export type PhysicalGlowAnalysisOptions = {
   /** Spectral-band to linear RGB matrix, layout [spectral band][RGB channel]. */
   spectralToRgb?: PhysicalGlowNumericArray
   naturalSkyRadianceRgb?: PhysicalGlowRgb
-  darkSkyMagnitudePerArcsec2?: number
   darkSkyLimitingMagnitude?: number
   limitingMagnitudeSlope?: number
-  estimateConvergence?: boolean
+  estimateOuterBoundary?: boolean
 }
 
 export type PhysicalGlowAnalyzeRequest = {
@@ -159,15 +158,6 @@ export type PhysicalGlowTimings = {
   totalMs: number
 }
 
-export type PhysicalGlowConfidence = {
-  overall: number
-  dataCoverage: number
-  emissionModel: number
-  propagationModel: number
-  numerical: number
-  outerTail: number
-}
-
 export type PhysicalGlowDiagnostics = {
   emissionCacheHit: boolean
   kernelCacheHit: boolean
@@ -180,8 +170,10 @@ export type PhysicalGlowDiagnostics = {
   maximumRadiance: number
   nonFiniteCount: number
   negativeCount: number
-  convergenceRelativeError: number
-  outerTailFractionEstimate: number
+  /** Fraction of modeled mean radiance contributed by rings at 300 km and beyond. */
+  distantContributionFraction: number
+  /** Fraction contributed by the outermost 100 km; a boundary-sensitivity indicator, not an error bound. */
+  outerBoundaryContributionFraction: number
 }
 
 export type PhysicalGlowComponentContribution = {
@@ -193,6 +185,8 @@ export type PhysicalGlowComponentContribution = {
 
 export type PhysicalGlowResult = {
   azimuthCount: number
+  /** Bearing of azimuth sample zero; sectors represent half-degree cell centres. */
+  azimuthOffsetDeg: number
   elevationDeg: Float32Array
   wavelengthsNm: Float32Array
   /** Layout: [elevation][azimuth][spectral band]. */
@@ -208,7 +202,6 @@ export type PhysicalGlowResult = {
   componentContributions: PhysicalGlowComponentContribution[]
   diagnostics: PhysicalGlowDiagnostics
   timings: PhysicalGlowTimings
-  confidence: PhysicalGlowConfidence
 }
 
 export type PhysicalGlowResultMessage = {

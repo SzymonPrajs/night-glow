@@ -11,7 +11,7 @@ import type {
 } from '../lib/physicalGlowProtocol'
 import {
   atmosphericKernelCacheKey,
-  buildAtmosphericKernel,
+  buildAtmosphericKernelAsync,
   convolveRingEmissionField,
   createRingConvolutionPlan,
   createRingEmissionField,
@@ -34,6 +34,9 @@ const scope = self as unknown as WorkerScope
 const emissionCache = new Map<string, PhysicalGlowEmissionGrid>()
 const kernelCache = new Map<string, AtmosphericKernel>()
 const planCache = new Map<string, RingConvolutionPlan>()
+const MAX_EMISSION_CACHE_ENTRIES = 3
+const MAX_KERNEL_CACHE_ENTRIES = 4
+const MAX_PLAN_CACHE_ENTRIES = 4
 const cancelled = new Set<number>()
 let latestAnalyzeRequest = 0
 
@@ -121,13 +124,17 @@ async function analyze(request: PhysicalGlowAnalyzeRequest) {
     }
     const kernelGrid = makeKernelGrid(emission.ringRadiiKm, request)
     const kernelStarted = performance.now()
-    const kernelResolution = resolveKernel(
+    let lastKernelProgressAt = Number.NEGATIVE_INFINITY
+    const kernelResolution = await resolveKernel(
       request,
       bands,
       atmosphereInput,
       transferOptions,
       kernelGrid,
       (completed, total) => {
+        const now = performance.now()
+        if (completed < total && now - lastKernelProgressAt < 34) return
+        lastKernelProgressAt = now
         components.kernel = 0.84 * completed / Math.max(1, total)
         postProgress(
           request,
@@ -148,6 +155,7 @@ async function analyze(request: PhysicalGlowAnalyzeRequest) {
       emission.sectorCount,
       bandIds,
       toFloat64(emission.upwardSpectralFlux),
+      180 / emission.sectorCount,
     )
     components.kernel = 0.88
     postProgress(request, weights, components, 'Preparing harmonic transfer plan', 'Compressing the angular kernel into resolved Fourier modes')
@@ -157,7 +165,7 @@ async function analyze(request: PhysicalGlowAnalyzeRequest) {
       emission.sectorCount,
       kernelGrid.elevationsDeg,
     )
-    let plan = planCache.get(planKey)
+    let plan = lruGet(planCache, planKey)
     if (!plan) {
       plan = createRingConvolutionPlan(
         kernelResolution.kernel,
@@ -165,7 +173,7 @@ async function analyze(request: PhysicalGlowAnalyzeRequest) {
         emission.sectorCount,
         kernelGrid.elevationsDeg,
       )
-      planCache.set(planKey, plan)
+      lruSet(planCache, planKey, plan, MAX_PLAN_CACHE_ENTRIES)
     }
     components.kernel = 1
     kernelMs = performance.now() - kernelStarted
@@ -207,7 +215,7 @@ async function analyze(request: PhysicalGlowAnalyzeRequest) {
 
     const diagnosticsStarted = performance.now()
     components.diagnostics = 0.2
-    postProgress(request, weights, components, 'Checking conservation and outer-ring convergence')
+    postProgress(request, weights, components, 'Checking component balance and outer-domain sensitivity')
     const ringContribution = calculateRingContributions(
       emission,
       plan,
@@ -223,29 +231,23 @@ async function analyze(request: PhysicalGlowAnalyzeRequest) {
     const statistics = fieldStatistics(spectralSky.radiance, rgbRadiance, bands.length)
     const totalInputSpectralFlux = sumInputSpectrum(emission)
     const componentFluxResidual = calculateComponentFluxResidual(emission, totalInputSpectralFlux)
-    const outerTailFractionEstimate = tailFraction(
+    const distantContributionFraction = distantContributionFractionFromRings(
       ringContribution.ringMeanSpectralRadiance,
       emission.ringRadiiKm,
       bands.length,
     )
-    const convergenceRelativeError = request.options?.estimateConvergence === false
+    const outerBoundaryContributionFraction = request.options?.estimateOuterBoundary === false
       ? 0
-      : outerConvergenceEstimate(
+      : outerBoundaryFraction(
           ringContribution.ringMeanSpectralRadiance,
           emission.ringRadiiKm,
           bands.length,
         )
-    const confidence = calculateConfidence(
-      emission,
-      kernelResolution.kernel,
-      statistics,
-      componentFluxResidual,
-      outerTailFractionEstimate,
-    )
     components.diagnostics = 1
     diagnosticsMs = performance.now() - diagnosticsStarted
     const result: PhysicalGlowResult = {
       azimuthCount: emission.sectorCount,
+      azimuthOffsetDeg: spectralSky.azimuthsDeg[0] ?? 0,
       elevationDeg: Float32Array.from(spectralSky.elevationsDeg),
       wavelengthsNm: Float32Array.from(emission.wavelengthsNm),
       spectralRadiance: spectralSky.radiance,
@@ -266,8 +268,8 @@ async function analyze(request: PhysicalGlowAnalyzeRequest) {
         maximumRadiance: statistics.maximum,
         nonFiniteCount: statistics.nonFinite,
         negativeCount: statistics.negative,
-        convergenceRelativeError,
-        outerTailFractionEstimate,
+        distantContributionFraction,
+        outerBoundaryContributionFraction,
       },
       timings: {
         debounceMs,
@@ -277,14 +279,13 @@ async function analyze(request: PhysicalGlowAnalyzeRequest) {
         diagnosticsMs,
         totalMs: performance.now() - totalStarted,
       },
-      confidence,
     }
     postProgress(
       request,
       weights,
       components,
       'Finalizing the sky field',
-      `Conservation residual ${(componentFluxResidual * 100).toExponential(1)}%`,
+      `Component accounting residual ${(componentFluxResidual * 100).toExponential(1)}%`,
     )
     await delay(0)
     if (finishIfStale(request)) return
@@ -305,16 +306,21 @@ async function analyze(request: PhysicalGlowAnalyzeRequest) {
 
 function resolveEmission(request: PhysicalGlowAnalyzeRequest) {
   if (request.emission.kind === 'cache') {
-    const cached = emissionCache.get(request.emission.cacheKey)
+    const cached = lruGet(emissionCache, request.emission.cacheKey)
     if (!cached) throw new Error(`Emission cache miss for ${request.emission.cacheKey}`)
     return cached
   }
   validateEmission(request.emission.grid)
-  emissionCache.set(request.emission.cacheKey, request.emission.grid)
+  lruSet(
+    emissionCache,
+    request.emission.cacheKey,
+    request.emission.grid,
+    MAX_EMISSION_CACHE_ENTRIES,
+  )
   return request.emission.grid
 }
 
-function resolveKernel(
+async function resolveKernel(
   request: PhysicalGlowAnalyzeRequest,
   bands: readonly SpectralBand[],
   atmosphere: AtmosphereInput,
@@ -323,12 +329,12 @@ function resolveKernel(
   onProgress: (completed: number, total: number) => void,
 ) {
   if (request.kernel.kind === 'cache') {
-    const cached = kernelCache.get(request.kernel.cacheKey)
+    const cached = lruGet(kernelCache, request.kernel.cacheKey)
     if (!cached) throw new Error(`Atmosphere kernel cache miss for ${request.kernel.cacheKey}`)
     return { kernel: cached, cacheHit: true, mode: 'inline' as const }
   }
   if (request.kernel.kind === 'inline') {
-    const cached = kernelCache.get(request.kernel.cacheKey)
+    const cached = lruGet(kernelCache, request.kernel.cacheKey)
     if (cached) return { kernel: cached, cacheHit: true, mode: 'inline' as const }
     const kernel = inlineAtmosphericKernel(
       request.kernel.cacheKey,
@@ -337,7 +343,7 @@ function resolveKernel(
       transferOptions,
       bands,
     )
-    kernelCache.set(request.kernel.cacheKey, kernel)
+    lruSet(kernelCache, request.kernel.cacheKey, kernel, MAX_KERNEL_CACHE_ENTRIES, evictKernelPlans)
     return { kernel, cacheHit: false, mode: 'inline' as const }
   }
   const key = request.kernel.cacheKey ?? atmosphericKernelCacheKey(
@@ -346,14 +352,16 @@ function resolveKernel(
     transferOptions,
     bands,
   )
-  const cached = kernelCache.get(key)
+  const cached = lruGet(kernelCache, key)
   if (cached) return { kernel: cached, cacheHit: true, mode: 'auto-analytic-scaffold' as const }
-  const kernel = buildAtmosphericKernel(atmosphere, grid, {
+  const kernel = await buildAtmosphericKernelAsync(atmosphere, grid, {
     ...transferOptions,
     bands,
     onProgress,
+    yieldEvery: 128,
+    shouldCancel: () => isStale(request),
   })
-  kernelCache.set(key, kernel)
+  lruSet(kernelCache, key, kernel, MAX_KERNEL_CACHE_ENTRIES, evictKernelPlans)
   return { kernel, cacheHit: false, mode: 'auto-analytic-scaffold' as const }
 }
 
@@ -392,7 +400,7 @@ function makeKernelGrid(ringRadii: ArrayLike<number>, request: PhysicalGlowAnaly
     ? request.kernel.elevationDeg
     : request.kernel.kind === 'inline'
       ? request.kernel.kernel.elevationDeg
-      : kernelCache.get(request.kernel.cacheKey)?.grid.elevationsDeg ?? [0, 2, 5, 10, 15, 20, 30, 45, 60, 75, 90]
+      : lruGet(kernelCache, request.kernel.cacheKey)?.grid.elevationsDeg ?? [0, 2, 5, 10, 15, 20, 30, 45, 60, 75, 90]
   return {
     distancesKm: [...new Set(distanceCandidates.filter((value) => value <= maximumDistance).concat(maximumDistance))].sort((a, b) => a - b),
     relativeAzimuthsDeg: Array.from({ length: 37 }, (_, index) => index * 5),
@@ -617,7 +625,7 @@ function calculateComponentFluxResidual(emission: PhysicalGlowEmissionGrid, tota
   return residual / Math.max(1e-12, denominator)
 }
 
-function tailFraction(values: Float32Array, rings: ArrayLike<number>, bandCount: number) {
+function distantContributionFractionFromRings(values: Float32Array, rings: ArrayLike<number>, bandCount: number) {
   let tail = 0
   let total = 0
   for (let ring = 0; ring < rings.length; ring += 1) {
@@ -630,7 +638,7 @@ function tailFraction(values: Float32Array, rings: ArrayLike<number>, bandCount:
   return tail / Math.max(1e-12, total)
 }
 
-function outerConvergenceEstimate(values: Float32Array, rings: ArrayLike<number>, bandCount: number) {
+function outerBoundaryFraction(values: Float32Array, rings: ArrayLike<number>, bandCount: number) {
   let outer = 0
   let total = 0
   const threshold = Math.max(300, rings[rings.length - 1] - 100)
@@ -642,30 +650,6 @@ function outerConvergenceEstimate(values: Float32Array, rings: ArrayLike<number>
     }
   }
   return outer / Math.max(1e-12, total)
-}
-
-function calculateConfidence(
-  emission: PhysicalGlowEmissionGrid,
-  kernel: AtmosphericKernel,
-  statistics: ReturnType<typeof fieldStatistics>,
-  componentResidual: number,
-  tail: number,
-) {
-  const dataCoverage = emission.coverage ? meanClamped(emission.coverage) : 0.72
-  const emissionModel = emission.confidence ? meanClamped(emission.confidence) : 0.58
-  const propagationModel = clamp(0.82 - 0.025 * Math.max(0, kernel.maxOrdersUsed - 2), 0.55, 0.9)
-  const numerical = statistics.nonFinite === 0 && statistics.negative === 0
-    ? clamp(1 - componentResidual * 10, 0, 1)
-    : 0
-  const outerTail = clamp(1 - tail, 0, 1)
-  return {
-    overall: 0.22 * dataCoverage + 0.25 * emissionModel + 0.28 * propagationModel + 0.15 * numerical + 0.1 * outerTail,
-    dataCoverage,
-    emissionModel,
-    propagationModel,
-    numerical,
-    outerTail,
-  }
 }
 
 function resultTransferables(result: PhysicalGlowResult) {
@@ -741,6 +725,36 @@ function clearPlansForKernel(kernelKey: string) {
   for (const [key, plan] of planCache) if (plan.kernelKey === kernelKey) planCache.delete(key)
 }
 
+function evictKernelPlans(kernel: AtmosphericKernel) {
+  clearPlansForKernel(kernel.key)
+}
+
+function lruGet<K, V>(cache: Map<K, V>, key: K) {
+  const value = cache.get(key)
+  if (value === undefined) return undefined
+  cache.delete(key)
+  cache.set(key, value)
+  return value
+}
+
+function lruSet<K, V>(
+  cache: Map<K, V>,
+  key: K,
+  value: V,
+  maximumEntries: number,
+  onEvict?: (value: V) => void,
+) {
+  cache.delete(key)
+  cache.set(key, value)
+  while (cache.size > maximumEntries) {
+    const oldestKey = cache.keys().next().value as K | undefined
+    if (oldestKey === undefined) break
+    const oldestValue = cache.get(oldestKey)
+    cache.delete(oldestKey)
+    if (oldestValue !== undefined) onEvict?.(oldestValue)
+  }
+}
+
 function validateNonNegative(values: ArrayLike<number>, label: string) {
   for (let index = 0; index < values.length; index += 1) {
     if (!Number.isFinite(values[index]) || values[index] < 0) throw new Error(`${label} ${index} must be finite and non-negative`)
@@ -749,12 +763,6 @@ function validateNonNegative(values: ArrayLike<number>, label: string) {
 
 function toFloat64(values: ArrayLike<number>) {
   return values instanceof Float64Array ? values : Float64Array.from(values)
-}
-
-function meanClamped(values: ArrayLike<number>) {
-  let sum = 0
-  for (let index = 0; index < values.length; index += 1) sum += clamp(values[index], 0, 1)
-  return sum / Math.max(1, values.length)
 }
 
 function luminance(red: number, green: number, blue: number) {

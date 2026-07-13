@@ -9,6 +9,7 @@ import { angularDistanceDegrees } from './geometry'
 import { computePreparedUnitSourceSpectrum } from './radiativeTransfer'
 import type {
   AtmosphereInput,
+  AsyncKernelBuildOptions,
   AtmosphericKernel,
   KernelBuildOptions,
   KernelGridSpec,
@@ -22,60 +23,130 @@ export function buildAtmosphericKernel(
   gridInput: KernelGridSpec = DEFAULT_KERNEL_GRID,
   buildOptions: KernelBuildOptions = {},
 ): AtmosphericKernel {
-  const grid = normalizeKernelGrid(gridInput)
-  const bands = normalizeBands(buildOptions.bands ?? DEFAULT_SPECTRAL_BANDS)
-  const atmosphere = prepareAtmosphere(atmosphereInput, bands)
-  const options = normalizeRadiativeTransferOptions(toRadiativeTransferInput(buildOptions))
-  const bandCount = bands.length
-  const totalCells = grid.distancesKm.length * grid.elevationsDeg.length * grid.relativeAzimuthsDeg.length
-  const values = new Float32Array(totalCells * bandCount)
-  let completed = 0
-  let maxOrdersUsed = 0
+  const context = prepareKernelBuild(atmosphereInput, gridInput, buildOptions)
 
-  for (let distanceIndex = 0; distanceIndex < grid.distancesKm.length; distanceIndex += 1) {
-    const distanceKm = grid.distancesKm[distanceIndex]
-    for (let elevationIndex = 0; elevationIndex < grid.elevationsDeg.length; elevationIndex += 1) {
-      const elevationDeg = grid.elevationsDeg[elevationIndex]
-      for (let azimuthIndex = 0; azimuthIndex < grid.relativeAzimuthsDeg.length; azimuthIndex += 1) {
-        const relativeAzimuthDeg = grid.relativeAzimuthsDeg[azimuthIndex]
-        const spectrum = computePreparedUnitSourceSpectrum(
-          distanceKm,
-          relativeAzimuthDeg,
-          elevationDeg,
-          atmosphere,
-          options,
-        )
-        const base = kernelValueIndex(
-          distanceIndex,
-          elevationIndex,
-          azimuthIndex,
-          0,
-          grid,
-          bandCount,
-        )
-        for (let bandIndex = 0; bandIndex < bandCount; bandIndex += 1) {
-          values[base + bandIndex] = nonNegativeFinite(spectrum.radiance[bandIndex])
-          maxOrdersUsed = Math.max(maxOrdersUsed, spectrum.ordersUsed[bandIndex])
-        }
-        completed += 1
-        if (buildOptions.onProgress && (completed === totalCells || completed % 16 === 0)) {
-          buildOptions.onProgress(completed, totalCells)
+  for (let distance = 0; distance < context.grid.distancesKm.length; distance += 1) {
+    for (let elevation = 0; elevation < context.grid.elevationsDeg.length; elevation += 1) {
+      for (let azimuth = 0; azimuth < context.grid.relativeAzimuthsDeg.length; azimuth += 1) {
+        computeKernelCell(context, distance, elevation, azimuth)
+        reportKernelProgress(context, buildOptions.onProgress)
+      }
+    }
+  }
+  return finishKernelBuild(context)
+}
+
+/**
+ * Worker-friendly kernel construction. Numerical cells are identical to the
+ * synchronous builder, but periodic task yields allow cancellation messages
+ * to be processed before a stale slider request finishes the whole grid.
+ */
+export async function buildAtmosphericKernelAsync(
+  atmosphereInput: AtmosphereInput = {},
+  gridInput: KernelGridSpec = DEFAULT_KERNEL_GRID,
+  buildOptions: AsyncKernelBuildOptions = {},
+): Promise<AtmosphericKernel> {
+  const context = prepareKernelBuild(atmosphereInput, gridInput, buildOptions)
+  const yieldEvery = Math.max(16, Math.floor(buildOptions.yieldEvery ?? 128))
+  if (buildOptions.shouldCancel?.()) throw new Error('Atmospheric kernel build cancelled')
+
+  for (let distance = 0; distance < context.grid.distancesKm.length; distance += 1) {
+    for (let elevation = 0; elevation < context.grid.elevationsDeg.length; elevation += 1) {
+      for (let azimuth = 0; azimuth < context.grid.relativeAzimuthsDeg.length; azimuth += 1) {
+        computeKernelCell(context, distance, elevation, azimuth)
+        reportKernelProgress(context, buildOptions.onProgress)
+        if (context.completed % yieldEvery === 0 && context.completed < context.totalCells) {
+          await yieldToEventLoop()
+          if (buildOptions.shouldCancel?.()) throw new Error('Atmospheric kernel build cancelled')
         }
       }
     }
   }
+  return finishKernelBuild(context)
+}
 
+type KernelBuildContext = ReturnType<typeof prepareKernelBuild>
+
+function prepareKernelBuild(
+  atmosphereInput: AtmosphereInput,
+  gridInput: KernelGridSpec,
+  buildOptions: KernelBuildOptions,
+) {
+  const grid = normalizeKernelGrid(gridInput)
+  const bands = normalizeBands(buildOptions.bands ?? DEFAULT_SPECTRAL_BANDS)
+  const atmosphere = prepareAtmosphere(atmosphereInput, bands)
+  const options = normalizeRadiativeTransferOptions(toRadiativeTransferInput(buildOptions))
+  const totalCells = grid.distancesKm.length * grid.elevationsDeg.length * grid.relativeAzimuthsDeg.length
+  return {
+    grid,
+    bands,
+    atmosphere,
+    options,
+    values: new Float32Array(totalCells * bands.length),
+    totalCells,
+    completed: 0,
+    maxOrdersUsed: 0,
+  }
+}
+
+function computeKernelCell(
+  context: KernelBuildContext,
+  distanceIndex: number,
+  elevationIndex: number,
+  azimuthIndex: number,
+) {
+  const spectrum = computePreparedUnitSourceSpectrum(
+    context.grid.distancesKm[distanceIndex],
+    context.grid.relativeAzimuthsDeg[azimuthIndex],
+    context.grid.elevationsDeg[elevationIndex],
+    context.atmosphere,
+    context.options,
+  )
+  const base = kernelValueIndex(
+    distanceIndex,
+    elevationIndex,
+    azimuthIndex,
+    0,
+    context.grid,
+    context.bands.length,
+  )
+  for (let band = 0; band < context.bands.length; band += 1) {
+    context.values[base + band] = nonNegativeFinite(spectrum.radiance[band])
+    context.maxOrdersUsed = Math.max(context.maxOrdersUsed, spectrum.ordersUsed[band])
+  }
+  context.completed += 1
+}
+
+function reportKernelProgress(
+  context: KernelBuildContext,
+  onProgress: KernelBuildOptions['onProgress'],
+) {
+  if (onProgress && (context.completed === context.totalCells || context.completed % 16 === 0)) {
+    onProgress(context.completed, context.totalCells)
+  }
+}
+
+function finishKernelBuild(context: KernelBuildContext): AtmosphericKernel {
   return {
     version: 1,
-    key: atmosphericKernelCacheKey(atmosphere.state, grid, options, bands),
-    bands,
-    grid,
-    atmosphere: atmosphere.state,
-    options,
-    values,
+    key: atmosphericKernelCacheKey(
+      context.atmosphere.state,
+      context.grid,
+      context.options,
+      context.bands,
+    ),
+    bands: context.bands,
+    grid: context.grid,
+    atmosphere: context.atmosphere.state,
+    options: context.options,
+    values: context.values,
     units: 'relative-radiance-per-unit-upward-spectral-power',
-    maxOrdersUsed,
+    maxOrdersUsed: context.maxOrdersUsed,
   }
+}
+
+function yieldToEventLoop() {
+  return new Promise<void>((resolve) => setTimeout(resolve, 0))
 }
 
 export function atmosphericKernelCacheKey(

@@ -105,6 +105,13 @@ export type KernelBuildOptions = RadiativeTransferInput & {
   onProgress?: (completed: number, total: number) => void
 }
 
+export type AsyncKernelBuildOptions = KernelBuildOptions & {
+  /** Number of unit-source cells between event-loop yields. */
+  yieldEvery?: number
+  /** Checked after every yield so a worker can supersede stale atmosphere work. */
+  shouldCancel?: () => boolean
+}
+
 export type RingEmissionField = {
   ringDistancesKm: readonly number[]
   sectorCount: number

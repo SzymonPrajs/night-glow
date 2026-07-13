@@ -240,7 +240,7 @@ export default function SkyCanvas({
     refs.skyMaterial.uniforms.uHumidity.value = atmosphere.humidity
     refs.skyMaterial.uniforms.uSunAltitude.value = sun?.altitude ?? -30
     rebuildStars(refs, location, date, metrics, atmosphere, glowField)
-    rebuildMilkyWay(refs, location, date, metrics, atmosphere)
+    rebuildMilkyWay(refs, location, date, metrics, atmosphere, glowField)
     rebuildDeepSky(refs, location, date, metrics, glowField)
     rebuildSolarSystem(refs, solarSystem, metrics, glowField)
     rebuildPhysicalGlows(refs, glowField)
@@ -358,10 +358,16 @@ function rebuildStars(
   }
 }
 
-function rebuildMilkyWay(refs: SceneRefs, location: Location, date: Date, metrics: SkyMetrics, atmosphere: Atmosphere) {
+function rebuildMilkyWay(
+  refs: SceneRefs,
+  location: Location,
+  date: Date,
+  metrics: SkyMetrics,
+  atmosphere: Atmosphere,
+  glowField?: PhysicalGlowResult,
+) {
   clearGroup(refs.milkyWayGroup)
-  const visibility = clamp((metrics.limitingMagnitude - 4.55) / 2.2, 0, 1) * (1 - atmosphere.cloud * 0.86)
-  if (visibility < 0.025) return
+  const globalLightPenalty = directionalLightPenalty(glowField, metrics)
   const positions: number[] = []
   const colors: number[] = []
   const sizes: number[] = []
@@ -369,12 +375,18 @@ function rebuildMilkyWay(refs: SceneRefs, location: Location, date: Date, metric
   for (const point of MILKY_WAY_POINTS) {
     const equatorial = galacticToEquatorial(point.longitude, point.latitude)
     const horizontal = equatorialToHorizontal(equatorial.ra, equatorial.dec, date, location)
+    const localLimit = glowField
+      ? samplePhysicalGlow(glowField, horizontal.azimuth, horizontal.altitude).limitingMagnitude - globalLightPenalty
+      : metrics.limitingMagnitude
+    const visibility = clamp((localLimit - 4.55) / 2.2, 0, 1) * (1 - atmosphere.cloud * 0.86)
+    if (visibility < 0.025) continue
     const vector = horizontalVector(horizontal.azimuth, horizontal.altitude, 108)
     positions.push(vector.x, vector.y, vector.z)
     colors.push(0.55, 0.67, 0.8)
     sizes.push(1.1 + point.intensity * 1.45)
     opacities.push(point.intensity * visibility * 0.24)
   }
+  if (!positions.length) return
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
@@ -450,7 +462,7 @@ function rebuildPhysicalGlows(refs: SceneRefs, field?: PhysicalGlowResult) {
   const sampleCount = field.azimuthCount
 
   for (let index = 0; index <= sampleCount; index += 1) {
-    const bearing = (index / sampleCount) * 360
+    const bearing = field.azimuthOffsetDeg + (index / sampleCount) * 360
     const sourceBearing = index % sampleCount
     for (let level = 0; level < altitudes.length; level += 1) {
       const altitude = altitudes[level]

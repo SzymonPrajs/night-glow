@@ -1,6 +1,6 @@
 import { compileDiagnostics } from './diagnostics'
 import { bearingDegrees, distanceKm } from './geo'
-import { POLAR_RINGS, ringIndexForDistance, SECTOR_COUNT, SECTOR_WIDTH_DEG, sectorIndexForBearing } from './rings'
+import { POLAR_RINGS, ringIndexForDistance, SECTOR_COUNT, SECTOR_WIDTH_DEG, sectorWeightsForBearing } from './rings'
 import { quadratureSamples } from './rasterize'
 import { addScaledSpectrum, copySpectralFlux, spectralTotal, spectrumToArray } from './spectrum'
 import {
@@ -80,13 +80,14 @@ export function buildEmissionGrid(options: BuildEmissionGridOptions): EmissionGr
       }
 
       depositedWeight += sample.weight
-      const sectorIndex = sectorIndexForBearing(bearingDegrees(options.observer, sample.point))
-      const valueStart = cellValueIndex(ringIndex, sectorIndex, 0)
+      const sectorWeights = sectorWeightsForBearing(bearingDegrees(options.observer, sample.point))
       const componentValues = getComponentValues(componentRingValues, source.component)
       const componentStart = ringIndex * SPECTRAL_BAND_COUNT
       for (let band = 0; band < SPECTRAL_BAND_COUNT; band += 1) {
         const contribution = flux[band] * fraction
-        values[valueStart + band] += contribution
+        for (const sector of sectorWeights) {
+          values[cellValueIndex(ringIndex, sector.index, band)] += contribution * sector.weight
+        }
         componentValues[componentStart + band] += contribution
         sourceDeposited[band] += contribution
         depositedSpectralFlux[band] += contribution
