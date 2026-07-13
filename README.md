@@ -2,6 +2,8 @@
 
 An interactive observer-first night-sky and light-pollution explorer. Pick a location on the map, survey nearby mapped emitters, tune atmospheric scattering, and inspect the resulting sky in 3D.
 
+The map and atmosphere controls live in edge drawers: hover either side to inspect them temporarily, or use the pin control to keep a drawer open across visits.
+
 ## Run locally
 
 ```bash

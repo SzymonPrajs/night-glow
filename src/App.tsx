@@ -8,6 +8,8 @@ import {
   MapPin,
   Minus,
   MousePointer2,
+  Pin,
+  PinOff,
   Plus,
   RotateCcw,
   Settings2,
@@ -46,8 +48,10 @@ export default function App() {
   const [atmosphere, setAtmosphere] = useState(INITIAL_ATMOSPHERE)
   const [analysis, setAnalysis] = useState<MapAnalysis>(EMPTY_ANALYSIS)
   const [date, setDate] = useState(() => new Date())
-  const [mapOpen, setMapOpen] = useState(true)
-  const [settingsOpen, setSettingsOpen] = useState(true)
+  const [mapOpen, setMapOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [mapPinned, setMapPinned] = useState(() => localStorage.getItem('night-glow:map-pinned') === 'true')
+  const [settingsPinned, setSettingsPinned] = useState(() => localStorage.getItem('night-glow:settings-pinned') === 'true')
   const [resetViewToken, setResetViewToken] = useState(0)
   const [view, setView] = useState({ azimuth: 180, altitude: 17, fov: 62 })
 
@@ -70,6 +74,14 @@ export default function App() {
     }
   }, [location])
 
+  useEffect(() => {
+    localStorage.setItem('night-glow:map-pinned', String(mapPinned))
+  }, [mapPinned])
+
+  useEffect(() => {
+    localStorage.setItem('night-glow:settings-pinned', String(settingsPinned))
+  }, [settingsPinned])
+
   const solarSystem = useMemo(() => getSolarSystem(date, location), [date, location])
   const sun = solarSystem.find((object) => object.kind === 'sun')
   const moon = solarSystem.find((object) => object.kind === 'moon')
@@ -83,22 +95,20 @@ export default function App() {
 
   const nudgeTime = (hours: number) => setDate((current) => new Date(current.getTime() + hours * 3_600_000))
   const direction = compassDirection(view.azimuth)
-  const toggleMap = () => {
-    if (window.innerWidth <= 720) {
-      const currentlyVisible = mapOpen && !settingsOpen
-      setMapOpen(!currentlyVisible)
+  const setMapPin = (pinned: boolean) => {
+    setMapPinned(pinned)
+    if (pinned) setMapOpen(true)
+    if (pinned && window.innerWidth <= 720) {
+      setSettingsPinned(false)
       setSettingsOpen(false)
-    } else {
-      setMapOpen((open) => !open)
     }
   }
-  const toggleSettings = () => {
-    if (window.innerWidth <= 720) {
-      const currentlyVisible = settingsOpen
-      setSettingsOpen(!currentlyVisible)
+  const setSettingsPin = (pinned: boolean) => {
+    setSettingsPinned(pinned)
+    if (pinned) setSettingsOpen(true)
+    if (pinned && window.innerWidth <= 720) {
+      setMapPinned(false)
       setMapOpen(false)
-    } else {
-      setSettingsOpen((open) => !open)
     }
   }
 
@@ -134,19 +144,26 @@ export default function App() {
           <SummaryMetric label="Visible stars" value={`~${metrics.visibleStars.toLocaleString()}`} />
         </div>
 
-        <div className="top-actions">
-          <button className={mapOpen ? 'icon-button active' : 'icon-button'} onClick={toggleMap} aria-label="Toggle location map">
-            <Map size={18} />
-          </button>
-          <button className={settingsOpen ? 'icon-button active' : 'icon-button'} onClick={toggleSettings} aria-label="Toggle weather settings">
-            <Settings2 size={18} />
-          </button>
-        </div>
+        <div aria-hidden="true" />
       </header>
 
-      {mapOpen && (
-        <aside className="glass-panel location-panel" aria-label="Observer location and light sources">
-          <PanelHeader icon={<MapPin size={17} />} title="Observer location" onClose={() => setMapOpen(false)} />
+      <SideDrawer
+        side="left"
+        label="Location map"
+        tabIcon={<Map size={18} />}
+        panelClass="location-panel"
+        panelLabel="Observer location and light sources"
+        pinned={mapPinned}
+        open={mapOpen}
+        onOpenChange={setMapOpen}
+      >
+          <PanelHeader
+            icon={<MapPin size={17} />}
+            title="Observer location"
+            pinned={mapPinned}
+            onPinnedChange={setMapPin}
+            onClose={() => { setMapPinned(false); setMapOpen(false) }}
+          />
           <LocationMap location={location} sources={analysis.sources} status={analysis.status} onChange={setLocation} />
           <div className="coordinates">
             <LocateFixed size={14} />
@@ -165,15 +182,27 @@ export default function App() {
             </div>
             {analysis.message && <p className="analysis-message">{analysis.message}</p>}
           </div>
-        </aside>
-      )}
+      </SideDrawer>
 
-      {settingsOpen && (
-        <aside className="glass-panel settings-panel" aria-label="Atmospheric scattering settings">
-          <PanelHeader icon={<CloudSun size={17} />} title="Atmosphere" onClose={() => setSettingsOpen(false)} />
+      <SideDrawer
+        side="right"
+        label="Atmosphere settings"
+        tabIcon={<Settings2 size={18} />}
+        panelClass="settings-panel"
+        panelLabel="Atmospheric scattering settings"
+        pinned={settingsPinned}
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+      >
+          <PanelHeader
+            icon={<CloudSun size={17} />}
+            title="Atmosphere"
+            pinned={settingsPinned}
+            onPinnedChange={setSettingsPin}
+            onClose={() => { setSettingsPinned(false); setSettingsOpen(false) }}
+          />
           <SettingsPanel atmosphere={atmosphere} onChange={setAtmosphere} />
-        </aside>
-      )}
+      </SideDrawer>
 
       <div className="view-readout" aria-label="Current view direction">
         <div className="compass-disc"><span style={{ transform: `rotate(${-view.azimuth}deg)` }}>N</span></div>
@@ -215,11 +244,68 @@ export default function App() {
   )
 }
 
-function PanelHeader({ icon, title, onClose }: { icon: React.ReactNode; title: string; onClose: () => void }) {
+type SideDrawerProps = {
+  side: 'left' | 'right'
+  label: string
+  tabIcon: React.ReactNode
+  panelClass: string
+  panelLabel: string
+  pinned: boolean
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  children: React.ReactNode
+}
+
+function SideDrawer({ side, label, tabIcon, panelClass, panelLabel, pinned, open, onOpenChange, children }: SideDrawerProps) {
+  const expanded = pinned || open
+  return (
+    <section
+      className={`side-drawer ${side} ${expanded ? 'is-open' : ''} ${pinned ? 'is-pinned' : ''}`}
+      onMouseEnter={() => onOpenChange(true)}
+      onMouseLeave={() => { if (!pinned) onOpenChange(false) }}
+      onFocusCapture={() => onOpenChange(true)}
+      onBlurCapture={(event) => {
+        if (!pinned && !event.currentTarget.contains(event.relatedTarget as Node | null)) onOpenChange(false)
+      }}
+    >
+      <div className="drawer-hover-strip" aria-hidden="true" />
+      <button
+        className="drawer-tab"
+        onClick={() => onOpenChange(true)}
+        aria-label={`Show ${label}`}
+        aria-expanded={expanded}
+      >
+        {tabIcon}
+        <span>{label}</span>
+      </button>
+      <aside className={`glass-panel drawer-panel ${panelClass}`} aria-label={panelLabel} aria-hidden={!expanded}>
+        {children}
+      </aside>
+    </section>
+  )
+}
+
+function PanelHeader({ icon, title, pinned, onPinnedChange, onClose }: {
+  icon: React.ReactNode
+  title: string
+  pinned: boolean
+  onPinnedChange: (pinned: boolean) => void
+  onClose: () => void
+}) {
   return (
     <div className="panel-header">
-      <div>{icon}<strong>{title}</strong></div>
-      <button onClick={onClose} aria-label={`Close ${title}`}><X size={16} /></button>
+      <div className="panel-title">{icon}<strong>{title}</strong></div>
+      <div className="panel-actions">
+        <button
+          className={pinned ? 'pin-button active' : 'pin-button'}
+          onClick={() => onPinnedChange(!pinned)}
+          aria-label={pinned ? `Unpin ${title}` : `Pin ${title} open`}
+          aria-pressed={pinned}
+        >
+          {pinned ? <PinOff size={15} /> : <Pin size={15} />}
+        </button>
+        <button onClick={onClose} aria-label={`Close ${title}`}><X size={15} /></button>
+      </div>
     </div>
   )
 }
