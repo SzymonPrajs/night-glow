@@ -16,6 +16,7 @@ Create a production build with `npm run build` and check the source with `npm ru
 ## What is modeled
 
 - OpenStreetMap land-use polygons, major roads, and nearby settlements are fetched through Overpass. Polygon area, road length, settlement class, and population tags are converted to directional light-source estimates.
+- Each emitter is projected to its physical angular width and integrated into a continuous 360° horizon field. A normalized atmospheric convolution softens the edges without creating or losing total modeled light.
 - Aerosol haze and humidity increase scattering. Low cloud cover reflects more urban light back toward the observer; higher cloud bases reduce that effect.
 - Astronomy Engine supplies time- and observer-specific positions for the Sun, Moon, and planets. J2000 positions are used for the recognizable bright-star and deep-sky catalog.
 - Sky quality, limiting magnitude, Milky Way visibility, stars, clusters, nebulae, planets, moonlight, and twilight all respond to the model.

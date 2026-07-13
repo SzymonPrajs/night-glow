@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { BRIGHT_STARS, DEEP_SKY } from '../data/celestial'
 import { equatorialToHorizontal, galacticToEquatorial, horizontalVector, type HorizontalObject } from '../lib/astronomy'
-import { clamp, sourceGlowStrength } from '../lib/skyModel'
-import { bvToColor, createGlowTexture, createLabelTexture, createOrbTexture, FAINT_STARS, MILKY_WAY_POINTS } from '../lib/starField'
+import { buildHorizonRadiance, clamp } from '../lib/skyModel'
+import { bvToColor, createLabelTexture, createOrbTexture, FAINT_STARS, MILKY_WAY_POINTS } from '../lib/starField'
 import type { Atmosphere, LightSource, Location, SkyMetrics } from '../types'
 
 type ViewState = { azimuth: number; altitude: number; fov: number }
@@ -343,29 +343,78 @@ function rebuildSolarSystem(refs: SceneRefs, objects: HorizontalObject[], metric
 
 function rebuildGlows(refs: SceneRefs, sources: LightSource[], atmosphere: Atmosphere) {
   clearGroup(refs.glowGroup)
-  const bins = Array.from({ length: 24 }, () => 0)
-  for (const source of sources) {
-    const index = Math.round(source.bearing / 15) % 24
-    bins[index] += sourceGlowStrength(source, atmosphere)
+  const field = buildHorizonRadiance(sources, atmosphere, 360)
+  if (field.integratedRadiance < 0.02) return
+
+  const altitudes = [-2, 0, 4, 9, 16, 26, 40, 58]
+  const scaleHeight = 7 + atmosphere.aerosol * 13 + atmosphere.humidity * 6 + atmosphere.cloud * 8
+  const positions: number[] = []
+  const radiance: number[] = []
+  const altitudeMix: number[] = []
+  const indices: number[] = []
+  const sampleCount = field.values.length
+
+  for (let index = 0; index <= sampleCount; index += 1) {
+    const bearing = (index / sampleCount) * 360
+    const horizonRadiance = field.values[index % sampleCount]
+    for (const altitude of altitudes) {
+      const position = horizontalVector(bearing, altitude, 86)
+      const verticalFalloff = Math.exp(-Math.pow(Math.max(0, altitude) / scaleHeight, 1.16))
+      positions.push(position.x, position.y, position.z)
+      radiance.push(horizonRadiance * verticalFalloff)
+      altitudeMix.push(clamp(altitude / altitudes[altitudes.length - 1], 0, 1))
+    }
   }
-  const texture = createGlowTexture()
-  bins.forEach((value, index) => {
-    if (value < 0.3) return
-    const strength = clamp(Math.log1p(value) / 4.2, 0.06, 1)
-    const material = new THREE.SpriteMaterial({
-      map: texture,
-      color: new THREE.Color().setHSL(0.075, 0.78, 0.56),
-      transparent: true,
-      opacity: 0.18 + strength * 0.62,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    })
-    const sprite = new THREE.Sprite(material)
-    const position = horizontalVector(index * 15, 4 + strength * 2.2, 86)
-    sprite.position.set(position.x, position.y, position.z)
-    sprite.scale.set(18 + strength * 29, 10 + strength * 19, 1)
-    refs.glowGroup.add(sprite)
+
+  const rowSize = altitudes.length
+  for (let bearing = 0; bearing < sampleCount; bearing += 1) {
+    for (let level = 0; level < rowSize - 1; level += 1) {
+      const lowerLeft = bearing * rowSize + level
+      const upperLeft = lowerLeft + 1
+      const lowerRight = (bearing + 1) * rowSize + level
+      const upperRight = lowerRight + 1
+      indices.push(lowerLeft, lowerRight, upperLeft, upperLeft, lowerRight, upperRight)
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geometry.setAttribute('aRadiance', new THREE.Float32BufferAttribute(radiance, 1))
+  geometry.setAttribute('aAltitude', new THREE.Float32BufferAttribute(altitudeMix, 1))
+  geometry.setIndex(indices)
+  const material = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending,
+    uniforms: {
+      uExposure: { value: 0.055 + atmosphere.cloud * 0.025 },
+    },
+    vertexShader: `
+      attribute float aRadiance;
+      attribute float aAltitude;
+      varying float vRadiance;
+      varying float vAltitude;
+      void main() {
+        vRadiance = aRadiance;
+        vAltitude = aAltitude;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      varying float vRadiance;
+      varying float vAltitude;
+      uniform float uExposure;
+      void main() {
+        float alpha = 1.0 - exp(-max(vRadiance, 0.0) * uExposure);
+        vec3 horizonColor = vec3(.72, .24, .065);
+        vec3 upperColor = vec3(.25, .16, .14);
+        vec3 color = mix(horizonColor, upperColor, vAltitude);
+        gl_FragColor = vec4(color, alpha * .72);
+      }
+    `,
   })
+  refs.glowGroup.add(new THREE.Mesh(geometry, material))
 }
 
 function makePointMaterial(renderer: THREE.WebGLRenderer, blending: THREE.Blending = THREE.NormalBlending) {

@@ -37,6 +37,71 @@ export function sourceGlowStrength(source: LightSource, atmosphere: Atmosphere) 
   return clamp((source.flux / Math.pow(source.distanceKm + 1.5, 1.15)) * spread * cloudBoost, 0, 80)
 }
 
+export type HorizonRadianceField = {
+  values: number[]
+  integratedRadiance: number
+  peakRadiance: number
+}
+
+/**
+ * Integrates every extended emitter into a continuous angular radiance field.
+ * Each source is a uniform-width core convolved with an atmospheric edge halo;
+ * normalizing the kernel preserves total light as the apparent width changes.
+ */
+export function buildHorizonRadiance(
+  sources: LightSource[],
+  atmosphere: Atmosphere,
+  sampleCount = 180,
+): HorizonRadianceField {
+  const values = Array.from({ length: sampleCount }, () => 0)
+  const binWidthRadians = (Math.PI * 2) / sampleCount
+  const binWidthDegrees = 360 / sampleCount
+  const atmosphericBlur = 1.2 + atmosphere.aerosol * 6 + atmosphere.humidity * 3 +
+    atmosphere.cloud * Math.max(0.25, 1.05 - atmosphere.cloudBase * 0.065) * 6
+  let integratedRadiance = 0
+
+  for (const source of sources) {
+    const strength = sourceGlowStrength(source, atmosphere)
+    if (strength < 0.015) continue
+    const halfWidth = sourceAngularHalfWidth(source)
+    const weights = values.map((_, index) => {
+      const bearing = (index / sampleCount) * 360
+      const delta = angularDistance(bearing, source.bearing)
+      if (halfWidth >= 179.9) return 1
+      return 1 - smoothstep(
+        Math.max(0, halfWidth - binWidthDegrees * 0.5),
+        halfWidth + binWidthDegrees * 0.5,
+        delta,
+      )
+    })
+    const angularIntegral = weights.reduce((sum, weight) => sum + weight * binWidthRadians, 0)
+    if (angularIntegral <= 0) continue
+    weights.forEach((weight, index) => {
+      values[index] += (strength * weight) / angularIntegral
+    })
+    integratedRadiance += strength
+  }
+
+  const smoothedValues = circularGaussianBlur(values, atmosphericBlur / binWidthDegrees)
+  return {
+    values: smoothedValues,
+    integratedRadiance,
+    peakRadiance: smoothedValues.reduce((peak, value) => Math.max(peak, value), 0),
+  }
+}
+
+export function sourceAngularHalfWidth(source: LightSource) {
+  const radiusKm = source.areaKm2
+    ? Math.sqrt(source.areaKm2 / Math.PI)
+    : source.lengthKm
+      ? Math.max(0.08, source.lengthKm * 0.28)
+      : 0.35 + Math.sqrt(source.flux) * 0.18
+  const minimumWidth = source.category === 'place' ? 1.2 : source.category === 'built' ? 0.55 : 0.3
+  if (source.distanceKm <= radiusKm) return 180
+  const projected = (Math.asin(clamp(radiusKm / source.distanceKm, 0, 1)) * 180) / Math.PI
+  return clamp(Math.max(projected, minimumWidth), minimumWidth, 180)
+}
+
 function bortleFromSqm(sqm: number) {
   if (sqm >= 21.76) return 1
   if (sqm >= 21.6) return 2
@@ -51,4 +116,29 @@ function bortleFromSqm(sqm: number) {
 
 export function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
+}
+
+function angularDistance(a: number, b: number) {
+  return Math.abs(((a - b + 540) % 360) - 180)
+}
+
+function smoothstep(edge0: number, edge1: number, value: number) {
+  if (edge0 === edge1) return value < edge0 ? 0 : 1
+  const x = clamp((value - edge0) / (edge1 - edge0), 0, 1)
+  return x * x * (3 - 2 * x)
+}
+
+function circularGaussianBlur(values: number[], sigmaBins: number) {
+  if (sigmaBins < 0.15) return values
+  const radius = Math.max(1, Math.ceil(sigmaBins * 3))
+  const kernel = Array.from({ length: radius * 2 + 1 }, (_, index) => {
+    const offset = index - radius
+    return Math.exp(-0.5 * Math.pow(offset / sigmaBins, 2))
+  })
+  const kernelSum = kernel.reduce((sum, value) => sum + value, 0)
+  return values.map((_, index) => kernel.reduce((sum, weight, kernelIndex) => {
+    const offset = kernelIndex - radius
+    const wrappedIndex = (index + offset + values.length) % values.length
+    return sum + values[wrappedIndex] * weight
+  }, 0) / kernelSum)
 }

@@ -38,25 +38,6 @@ export function createLabelTexture(text: string, accent = '#dbeaff') {
   return { texture, aspect: width / 64 }
 }
 
-export function createGlowTexture(color = 'rgba(255, 172, 89, 1)') {
-  const canvas = document.createElement('canvas')
-  canvas.width = 256
-  canvas.height = 128
-  const context = canvas.getContext('2d')!
-  const gradient = context.createRadialGradient(128, 118, 2, 128, 112, 122)
-  gradient.addColorStop(0, color)
-  gradient.addColorStop(0.18, color.replace(', 1)', ', .55)'))
-  gradient.addColorStop(0.52, color.replace(', 1)', ', .15)'))
-  gradient.addColorStop(1, color.replace(', 1)', ', 0)'))
-  context.fillStyle = gradient
-  context.fillRect(0, 0, canvas.width, canvas.height)
-  const texture = new THREE.CanvasTexture(canvas)
-  texture.colorSpace = THREE.SRGBColorSpace
-  texture.minFilter = THREE.LinearFilter
-  texture.generateMipmaps = false
-  return texture
-}
-
 export function createOrbTexture(color: string, halo: string) {
   const canvas = document.createElement('canvas')
   canvas.width = 128
