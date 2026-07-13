@@ -18,9 +18,11 @@ import {
 import LocationMap from './components/LocationMap'
 import SettingsPanel from './components/SettingsPanel'
 import SkyCanvas from './components/SkyCanvas'
+import { usePhysicalGlow, type PhysicalGlowAnalysisState } from './hooks/usePhysicalGlow'
 import { getSolarSystem } from './lib/astronomy'
 import { analyzeOpenMap, fallbackAnalysis } from './lib/osm'
-import { calculateSkyMetrics, clamp } from './lib/skyModel'
+import { calculatePhysicalSkyMetrics } from './lib/physicalGlowField'
+import { clamp } from './lib/skyModel'
 import type { Atmosphere, Location, MapAnalysis } from './types'
 
 const INITIAL_LOCATION: Location = {
@@ -64,6 +66,7 @@ export default function App() {
   const [settingsPinned, setSettingsPinned] = useState(() => localStorage.getItem('night-glow:settings-pinned') === 'true')
   const [resetViewToken, setResetViewToken] = useState(0)
   const [view, setView] = useState({ azimuth: 180, altitude: 17, fov: 62 })
+  const physicalGlow = usePhysicalGlow(location, analysis.sources, atmosphere)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -72,6 +75,9 @@ export default function App() {
       status: 'loading',
       progress: 5,
       stage: 'Preparing map survey',
+      sources: [],
+      builtAreaKm2: 0,
+      roadLengthKm: 0,
       message: undefined,
     }))
     const timer = window.setTimeout(async () => {
@@ -96,16 +102,6 @@ export default function App() {
   }, [location])
 
   useEffect(() => {
-    if (analysis.status !== 'loading') return
-    const timer = window.setInterval(() => {
-      setAnalysis((current) => current.status === 'loading' && current.progress < 58
-        ? { ...current, progress: Math.min(58, current.progress + 1) }
-        : current)
-    }, 350)
-    return () => window.clearInterval(timer)
-  }, [analysis.status])
-
-  useEffect(() => {
     localStorage.setItem('night-glow:map-pinned', String(mapPinned))
   }, [mapPinned])
 
@@ -120,8 +116,8 @@ export default function App() {
     ? (moon.phase ?? 0) * Math.sin((clamp(moon.altitude, 0, 90) * Math.PI) / 180)
     : 0
   const metrics = useMemo(
-    () => calculateSkyMetrics(analysis.sources, atmosphere, sun?.altitude, moonLight),
-    [analysis.sources, atmosphere, sun?.altitude, moonLight],
+    () => calculatePhysicalSkyMetrics(physicalGlow.result, date, location, atmosphere, sun?.altitude, moonLight),
+    [physicalGlow.result, date, location, atmosphere, sun?.altitude, moonLight],
   )
 
   const nudgeTime = (hours: number) => setDate((current) => new Date(current.getTime() + hours * 3_600_000))
@@ -148,7 +144,7 @@ export default function App() {
       <SkyCanvas
         location={location}
         atmosphere={atmosphere}
-        sources={analysis.sources}
+        glowField={physicalGlow.result}
         metrics={metrics}
         date={date}
         solarSystem={solarSystem}
@@ -203,16 +199,23 @@ export default function App() {
           </div>
           <div className="analysis-block">
             <div className="analysis-title">
-              <span><Layers3 size={14} /> Open map survey</span>
-              <DataStatus status={analysis.status} />
+              <span><Layers3 size={14} /> Physical sky analysis</span>
+              <DataStatus analysis={analysis} physicalGlow={physicalGlow} />
             </div>
-            <SurveyProgress analysis={analysis} />
+            <SurveyProgress analysis={analysis} physicalGlow={physicalGlow} />
             <div className="analysis-grid">
-              <div><strong>{formatArea(analysis.builtAreaKm2)}</strong><span>built-up area</span></div>
-              <div><strong>{analysis.roadLengthKm.toFixed(0)} km</strong><span>major roads</span></div>
-              <div><strong>{analysis.sources.length}</strong><span>light sources</span></div>
+              <div><strong>{physicalGlow.emissionDiagnostics?.rings.length ?? 81}</strong><span>distance rings</span></div>
+              <div><strong>{physicalGlow.result?.azimuthCount ?? 720}</strong><span>bearings</span></div>
+              <div><strong>{physicalGlow.result?.wavelengthsNm.length ?? 8}</strong><span>spectral bands</span></div>
+            </div>
+            <RadianceBreakdown physicalGlow={physicalGlow} />
+            <div className="map-detail-summary">
+              <span>{formatArea(analysis.builtAreaKm2)} mapped area</span>
+              <span>{analysis.roadLengthKm.toFixed(0)} km roads</span>
+              <span>{analysis.sources.length.toLocaleString()} features</span>
             </div>
             {analysis.message && <p className="analysis-message">{analysis.message}</p>}
+            {physicalGlow.error && <p className="analysis-message">{physicalGlow.error}</p>}
           </div>
       </SideDrawer>
 
@@ -346,34 +349,104 @@ function SummaryMetric({ label, value }: { label: string; value: string }) {
   return <div className="summary-metric"><span>{label}</span><strong>{value}</strong></div>
 }
 
-function DataStatus({ status }: { status: MapAnalysis['status'] }) {
-  if (status === 'loading') return <span className="data-status loading"><i /> loading</span>
-  if (status === 'live') return <span className="data-status live"><i /> live OSM</span>
-  if (status === 'fallback') return <span className="data-status fallback"><i /> baseline</span>
+function DataStatus({ analysis, physicalGlow }: { analysis: MapAnalysis; physicalGlow: PhysicalGlowAnalysisState }) {
+  if (physicalGlow.status === 'loading') return <span className="data-status loading"><i /> solving</span>
+  if (physicalGlow.status === 'live' && analysis.status === 'fallback') {
+    return <span className="data-status fallback"><i /> regional</span>
+  }
+  if (physicalGlow.status === 'live') return <span className="data-status live"><i /> physical</span>
+  if (physicalGlow.status === 'error') return <span className="data-status fallback"><i /> previous field</span>
   return <span className="data-status"><i /> waiting</span>
 }
 
-function SurveyProgress({ analysis }: { analysis: MapAnalysis }) {
-  const progress = Math.round(clamp(analysis.progress, 0, 100))
+function SurveyProgress({ analysis, physicalGlow }: { analysis: MapAnalysis; physicalGlow: PhysicalGlowAnalysisState }) {
+  const mapProgress = analysis.status === 'live' || analysis.status === 'fallback'
+    ? 100
+    : clamp(analysis.progress, 0, 100)
+  const progress = Math.round(clamp(physicalGlow.progress * 0.9 + mapProgress * 0.1, 0, 100))
+  const rows = [
+    { label: 'Emission rings', value: physicalGlow.components.emission * 100 },
+    { label: 'Local map detail', value: mapProgress },
+    { label: 'Atmosphere kernel', value: physicalGlow.components.kernel * 100 },
+    { label: 'Sky convolution', value: physicalGlow.components.propagation * 100 },
+    { label: 'Numerical checks', value: physicalGlow.components.diagnostics * 100 },
+  ]
   return (
-    <div className={`analysis-progress ${analysis.status}`}>
+    <div className={`analysis-progress ${physicalGlow.status}`}>
       <div className="analysis-progress-label">
-        <span>{analysis.stage}</span>
+        <span>{physicalGlow.stage}</span>
         <strong>{progress}%</strong>
       </div>
       <div
         className="analysis-progress-track"
         role="progressbar"
-        aria-label="Open map survey progress"
+        aria-label="Physical sky analysis progress"
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={progress}
-        aria-valuetext={analysis.stage}
+        aria-valuetext={physicalGlow.stage}
       >
         <span style={{ width: `${progress}%` }} />
       </div>
+      <div className="analysis-progress-components" aria-label="Analysis component progress">
+        {rows.map((row) => (
+          <div key={row.label} className={row.value >= 99.5 ? 'complete' : row.value > 0 ? 'active' : ''}>
+            <span>{row.label}</span>
+            <i><b style={{ width: `${clamp(row.value, 0, 100)}%` }} /></i>
+            <strong>{Math.round(row.value)}%</strong>
+          </div>
+        ))}
+      </div>
+      {physicalGlow.detail && <p className="analysis-progress-detail">{physicalGlow.detail}</p>}
     </div>
   )
+}
+
+function RadianceBreakdown({ physicalGlow }: { physicalGlow: PhysicalGlowAnalysisState }) {
+  const result = physicalGlow.result
+  const rings = physicalGlow.emissionDiagnostics?.rings
+  if (!result || !rings) return null
+  const groups = [
+    { label: '0–20 km', minimum: 0, maximum: 20 },
+    { label: '20–100 km', minimum: 20, maximum: 100 },
+    { label: '100–300 km', minimum: 100, maximum: 300 },
+    { label: '300–1000 km', minimum: 300, maximum: 1001 },
+  ].map((group) => {
+    let radiance = 0
+    rings.forEach((entry, ringIndex) => {
+      if (entry.ring.midpointKm < group.minimum || entry.ring.midpointKm >= group.maximum) return
+      const base = ringIndex * 3
+      radiance += luminance(
+        result.ringMeanRgbRadiance[base],
+        result.ringMeanRgbRadiance[base + 1],
+        result.ringMeanRgbRadiance[base + 2],
+      )
+    })
+    return { ...group, radiance }
+  })
+  const total = groups.reduce((sum, group) => sum + group.radiance, 0)
+  return (
+    <div className="radiance-breakdown">
+      <div className="breakdown-heading"><span>Glow by distance</span><strong>{(result.diagnostics.outerTailFractionEstimate * 100).toFixed(1)}% outer tail</strong></div>
+      {groups.map((group) => {
+        const fraction = total > 0 ? group.radiance / total : 0
+        return (
+          <div className="radiance-row" key={group.label}>
+            <span>{group.label}</span>
+            <i><b style={{ width: `${fraction * 100}%` }} /></i>
+            <strong>{Math.round(fraction * 100)}%</strong>
+          </div>
+        )
+      })}
+      <div className="model-badges">
+        <span>Rayleigh</span><span>Aerosol</span><span>Cloud</span><span>Multiple scatter</span>
+      </div>
+    </div>
+  )
+}
+
+function luminance(red: number, green: number, blue: number) {
+  return Math.max(0, red * 0.2126 + green * 0.7152 + blue * 0.0722)
 }
 
 function toLocalInput(date: Date) {

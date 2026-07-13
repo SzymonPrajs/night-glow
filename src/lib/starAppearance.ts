@@ -21,8 +21,7 @@ export function starAppearance(
 ): StarAppearance {
   const airMass = relativeAirMass(altitude)
   const extraColumn = Math.max(0, airMass - 1)
-  const extinctionPerAirMass = 0.075 + atmosphere.aerosol * 0.24 + atmosphere.humidity * 0.1
-  const apparentMagnitude = star.mag + clamp(extraColumn * extinctionPerAirMass, 0, 3.5)
+  const apparentMagnitude = apparentStarMagnitude(star, altitude, atmosphere)
   const visibility = clamp((limitingMagnitude - apparentMagnitude + 0.32) / 0.68, 0, 1)
   const flux = 10 ** (-0.4 * apparentMagnitude)
   const brightnessScale = clamp(flux ** 0.2, 0.22, 1.6)
@@ -53,6 +52,12 @@ export function starAppearance(
     haloStrength,
     dispersion: (dispersionPixels * 2) / size,
   }
+}
+
+export function apparentStarMagnitude(star: CatalogStar, altitude: number, atmosphere: Atmosphere) {
+  const extraColumn = Math.max(0, relativeAirMass(altitude) - 1)
+  const extinctionPerAirMass = 0.075 + atmosphere.aerosol * 0.24 + atmosphere.humidity * 0.1
+  return star.mag + clamp(extraColumn * extinctionPerAirMass, 0, 3.5)
 }
 
 function observedStarColor(bv: number | null, spectralType: string, extraAirMass: number, atmosphere: Atmosphere) {

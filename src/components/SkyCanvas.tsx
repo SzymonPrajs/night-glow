@@ -3,17 +3,19 @@ import * as THREE from 'three'
 import { BRIGHT_STARS, DEEP_SKY } from '../data/celestial'
 import { STAR_CATALOG } from '../data/starCatalog'
 import { equatorialToHorizontal, galacticToEquatorial, horizontalVector, type HorizontalObject } from '../lib/astronomy'
-import { buildHorizonRadiance, clamp } from '../lib/skyModel'
+import { physicalZenithSample, samplePhysicalGlow } from '../lib/physicalGlowField'
+import type { PhysicalGlowResult } from '../lib/physicalGlowProtocol'
+import { clamp } from '../lib/skyModel'
 import { starAppearance } from '../lib/starAppearance'
 import { createLabelTexture, createOrbTexture, MILKY_WAY_POINTS } from '../lib/starField'
-import type { Atmosphere, LightSource, Location, SkyMetrics } from '../types'
+import type { Atmosphere, Location, SkyMetrics } from '../types'
 
 type ViewState = { azimuth: number; altitude: number; fov: number }
 
 type SkyCanvasProps = {
   location: Location
   atmosphere: Atmosphere
-  sources: LightSource[]
+  glowField?: PhysicalGlowResult
   metrics: SkyMetrics
   date: Date
   solarSystem: HorizontalObject[]
@@ -111,7 +113,7 @@ const starFragmentShader = `
 export default function SkyCanvas({
   location,
   atmosphere,
-  sources,
+  glowField,
   metrics,
   date,
   solarSystem,
@@ -233,16 +235,16 @@ export default function SkyCanvas({
     const refs = sceneRef.current
     if (!refs) return
     const sun = solarSystem.find((object) => object.kind === 'sun')
-    refs.skyMaterial.uniforms.uPollution.value = metrics.glowIndex / 100
+    refs.skyMaterial.uniforms.uPollution.value = metrics.glowIndex / 550
     refs.skyMaterial.uniforms.uCloud.value = atmosphere.cloud
     refs.skyMaterial.uniforms.uHumidity.value = atmosphere.humidity
     refs.skyMaterial.uniforms.uSunAltitude.value = sun?.altitude ?? -30
-    rebuildStars(refs, location, date, metrics, atmosphere)
+    rebuildStars(refs, location, date, metrics, atmosphere, glowField)
     rebuildMilkyWay(refs, location, date, metrics, atmosphere)
-    rebuildDeepSky(refs, location, date, metrics)
-    rebuildSolarSystem(refs, solarSystem, metrics)
-    rebuildGlows(refs, sources, atmosphere)
-  }, [location, date, metrics, atmosphere, solarSystem, sources])
+    rebuildDeepSky(refs, location, date, metrics, glowField)
+    rebuildSolarSystem(refs, solarSystem, metrics, glowField)
+    rebuildPhysicalGlows(refs, glowField)
+  }, [location, date, metrics, atmosphere, solarSystem, glowField])
 
   useEffect(() => {
     yawRef.current = 0
@@ -296,7 +298,14 @@ export default function SkyCanvas({
   )
 }
 
-function rebuildStars(refs: SceneRefs, location: Location, date: Date, metrics: SkyMetrics, atmosphere: Atmosphere) {
+function rebuildStars(
+  refs: SceneRefs,
+  location: Location,
+  date: Date,
+  metrics: SkyMetrics,
+  atmosphere: Atmosphere,
+  glowField?: PhysicalGlowResult,
+) {
   clearGroup(refs.starGroup)
   const positions: number[] = []
   const colors: number[] = []
@@ -306,10 +315,14 @@ function rebuildStars(refs: SceneRefs, location: Location, date: Date, metrics: 
   const haloWidths: number[] = []
   const haloStrengths: number[] = []
   const dispersions: number[] = []
+  const globalLightPenalty = directionalLightPenalty(glowField, metrics)
   for (const star of STAR_CATALOG) {
     const horizontal = equatorialToHorizontal(star.ra, star.dec, date, location)
     const vector = horizontalVector(horizontal.azimuth, horizontal.altitude, 102)
-    const appearance = starAppearance(star, horizontal.altitude, metrics.limitingMagnitude, atmosphere)
+    const directionalLimit = glowField
+      ? samplePhysicalGlow(glowField, horizontal.azimuth, horizontal.altitude).limitingMagnitude - globalLightPenalty
+      : metrics.limitingMagnitude
+    const appearance = starAppearance(star, horizontal.altitude, directionalLimit, atmosphere)
     positions.push(vector.x, vector.y, vector.z)
     colors.push(appearance.color.r, appearance.color.g, appearance.color.b)
     sizes.push(appearance.size)
@@ -331,9 +344,13 @@ function rebuildStars(refs: SceneRefs, location: Location, date: Date, metrics: 
   const material = makeStarMaterial(refs.renderer)
   refs.starGroup.add(new THREE.Points(geometry, material))
 
-  for (const star of BRIGHT_STARS.filter((item) => item.mag < 1.65 && item.mag < metrics.limitingMagnitude)) {
+  for (const star of BRIGHT_STARS.filter((item) => item.mag < 1.65)) {
     const horizontal = equatorialToHorizontal(star.ra, star.dec, date, location)
     if (horizontal.altitude < 3) continue
+    const localLimit = glowField
+      ? samplePhysicalGlow(glowField, horizontal.azimuth, horizontal.altitude).limitingMagnitude - globalLightPenalty
+      : metrics.limitingMagnitude
+    if (star.mag >= localLimit) continue
     const vector = horizontalVector(horizontal.azimuth, horizontal.altitude, 96)
     const label = makeLabel(`${star.name}  ·  ${star.constellation}`, '#a9cfff')
     label.position.set(vector.x, vector.y + 1.4, vector.z)
@@ -366,19 +383,29 @@ function rebuildMilkyWay(refs: SceneRefs, location: Location, date: Date, metric
   refs.milkyWayGroup.add(new THREE.Points(geometry, makePointMaterial(refs.renderer, THREE.AdditiveBlending)))
 }
 
-function rebuildDeepSky(refs: SceneRefs, location: Location, date: Date, metrics: SkyMetrics) {
+function rebuildDeepSky(
+  refs: SceneRefs,
+  location: Location,
+  date: Date,
+  metrics: SkyMetrics,
+  glowField?: PhysicalGlowResult,
+) {
   clearGroup(refs.deepGroup)
+  const globalLightPenalty = directionalLightPenalty(glowField, metrics)
   for (const object of DEEP_SKY) {
     const required = object.kind === 'cluster' ? object.mag - 0.6 : object.mag + 1.25
-    if (metrics.limitingMagnitude < required) continue
     const horizontal = equatorialToHorizontal(object.ra, object.dec, date, location)
     if (horizontal.altitude < 1) continue
+    const localLimit = glowField
+      ? samplePhysicalGlow(glowField, horizontal.azimuth, horizontal.altitude).limitingMagnitude - globalLightPenalty
+      : metrics.limitingMagnitude
+    if (localLimit < required) continue
     const vector = horizontalVector(horizontal.azimuth, horizontal.altitude, 98)
     const color = object.kind === 'nebula' ? '#80c6c2' : object.kind === 'galaxy' ? '#b1b9d9' : '#a8c7ff'
     const sprite = makeOrb(color, 'rgba(117, 155, 214, .25)', clamp(object.size / 18, 1.5, 7))
     sprite.position.set(vector.x, vector.y, vector.z)
     refs.deepGroup.add(sprite)
-    if (metrics.limitingMagnitude > 5.1 || object.mag < 4.2) {
+    if (localLimit > 5.1 || object.mag < 4.2) {
       const label = makeLabel(`${object.catalog}  ${object.name}`, color)
       label.position.set(vector.x, vector.y + 1.5, vector.z)
       refs.deepGroup.add(label)
@@ -386,11 +413,20 @@ function rebuildDeepSky(refs: SceneRefs, location: Location, date: Date, metrics
   }
 }
 
-function rebuildSolarSystem(refs: SceneRefs, objects: HorizontalObject[], metrics: SkyMetrics) {
+function rebuildSolarSystem(
+  refs: SceneRefs,
+  objects: HorizontalObject[],
+  metrics: SkyMetrics,
+  glowField?: PhysicalGlowResult,
+) {
   clearGroup(refs.planetGroup)
+  const globalLightPenalty = directionalLightPenalty(glowField, metrics)
   for (const object of objects) {
     if (object.altitude < -3) continue
-    if (object.kind === 'planet' && object.magnitude > metrics.limitingMagnitude) continue
+    const localLimit = glowField
+      ? samplePhysicalGlow(glowField, object.azimuth, object.altitude).limitingMagnitude - globalLightPenalty
+      : metrics.limitingMagnitude
+    if (object.kind === 'planet' && object.magnitude > localLimit) continue
     const vector = horizontalVector(object.azimuth, object.altitude, 92)
     const style = planetStyle(object.name)
     const scale = object.kind === 'sun' ? 8 : object.kind === 'moon' ? 5.5 : clamp(4.3 - object.magnitude * 0.35, 2.1, 5.5)
@@ -403,28 +439,29 @@ function rebuildSolarSystem(refs: SceneRefs, objects: HorizontalObject[], metric
   }
 }
 
-function rebuildGlows(refs: SceneRefs, sources: LightSource[], atmosphere: Atmosphere) {
+function rebuildPhysicalGlows(refs: SceneRefs, field?: PhysicalGlowResult) {
   clearGroup(refs.glowGroup)
-  const field = buildHorizonRadiance(sources, atmosphere, 360)
-  if (field.integratedRadiance < 0.02) return
+  if (!field?.rgbRadiance.length) return
 
-  const altitudes = [-2, 0, 4, 9, 16, 26, 40, 58]
-  const scaleHeight = 7 + atmosphere.aerosol * 13 + atmosphere.humidity * 6 + atmosphere.cloud * 8
+  const altitudes = field.elevationDeg
   const positions: number[] = []
   const radiance: number[] = []
-  const altitudeMix: number[] = []
   const indices: number[] = []
-  const sampleCount = field.values.length
+  const sampleCount = field.azimuthCount
 
   for (let index = 0; index <= sampleCount; index += 1) {
     const bearing = (index / sampleCount) * 360
-    const horizonRadiance = field.values[index % sampleCount]
-    for (const altitude of altitudes) {
+    const sourceBearing = index % sampleCount
+    for (let level = 0; level < altitudes.length; level += 1) {
+      const altitude = altitudes[level]
       const position = horizontalVector(bearing, altitude, 86)
-      const verticalFalloff = Math.exp(-Math.pow(Math.max(0, altitude) / scaleHeight, 1.16))
+      const source = (level * sampleCount + sourceBearing) * 3
       positions.push(position.x, position.y, position.z)
-      radiance.push(horizonRadiance * verticalFalloff)
-      altitudeMix.push(clamp(altitude / altitudes[altitudes.length - 1], 0, 1))
+      radiance.push(
+        field.rgbRadiance[source],
+        field.rgbRadiance[source + 1],
+        field.rgbRadiance[source + 2],
+      )
     }
   }
 
@@ -441,8 +478,7 @@ function rebuildGlows(refs: SceneRefs, sources: LightSource[], atmosphere: Atmos
 
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-  geometry.setAttribute('aRadiance', new THREE.Float32BufferAttribute(radiance, 1))
-  geometry.setAttribute('aAltitude', new THREE.Float32BufferAttribute(altitudeMix, 1))
+  geometry.setAttribute('aRadiance', new THREE.Float32BufferAttribute(radiance, 3))
   geometry.setIndex(indices)
   const material = new THREE.ShaderMaterial({
     transparent: true,
@@ -450,33 +486,33 @@ function rebuildGlows(refs: SceneRefs, sources: LightSource[], atmosphere: Atmos
     side: THREE.DoubleSide,
     blending: THREE.AdditiveBlending,
     uniforms: {
-      uExposure: { value: 0.055 + atmosphere.cloud * 0.025 },
+      uExposure: { value: 32 },
     },
     vertexShader: `
-      attribute float aRadiance;
-      attribute float aAltitude;
-      varying float vRadiance;
-      varying float vAltitude;
+      attribute vec3 aRadiance;
+      varying vec3 vRadiance;
       void main() {
         vRadiance = aRadiance;
-        vAltitude = aAltitude;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
     `,
     fragmentShader: `
-      varying float vRadiance;
-      varying float vAltitude;
+      varying vec3 vRadiance;
       uniform float uExposure;
       void main() {
-        float alpha = 1.0 - exp(-max(vRadiance, 0.0) * uExposure);
-        vec3 horizonColor = vec3(.72, .24, .065);
-        vec3 upperColor = vec3(.25, .16, .14);
-        vec3 color = mix(horizonColor, upperColor, vAltitude);
-        gl_FragColor = vec4(color, alpha * .72);
+        vec3 mapped = vec3(1.0) - exp(-max(vRadiance, vec3(0.0)) * uExposure);
+        float intensity = max(mapped.r, max(mapped.g, mapped.b));
+        if (intensity < .0005) discard;
+        gl_FragColor = vec4(mapped / intensity, intensity * .82);
       }
     `,
   })
   refs.glowGroup.add(new THREE.Mesh(geometry, material))
+}
+
+function directionalLightPenalty(field: PhysicalGlowResult | undefined, metrics: SkyMetrics) {
+  if (!field) return 0
+  return Math.max(0, physicalZenithSample(field).limitingMagnitude - metrics.limitingMagnitude)
 }
 
 function makePointMaterial(renderer: THREE.WebGLRenderer, blending: THREE.Blending = THREE.NormalBlending) {
