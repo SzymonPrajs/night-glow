@@ -13,16 +13,19 @@ npm run dev
 
 Create a production build with `npm run build` and check the source with `npm run lint`.
 
+Run the deterministic conservation/direction benchmark with `npm run test:physics`. Run the real browser/worker progress flow with `npm run test:e2e` (install Chromium once with `npx playwright install chromium`).
+
 ## What is modeled
 
-- OpenStreetMap land-use polygons, major roads, and nearby settlements are fetched through Overpass. Polygon area, road length, settlement class, and population tags are converted to directional light-source estimates.
-- Each emitter is projected to its physical angular width and integrated into a continuous 360° horizon field. A normalized atmospheric convolution softens the edges without creating or losing total modeled light.
-- Aerosol haze and humidity increase scattering. Low cloud cover reflects more urban light back toward the observer; higher cloud bases reduce that effect.
+- A bundled regional layer supplies extended settlement footprints out to 1000 km. OpenStreetMap land-use polygons, roads, and settlement tags refine those footprints without adding a duplicate copy of their light.
+- Every ellipse, polygon, and road is integrated by geometry quadrature into 81 observer-centred distance rings, 720 half-degree bearings, and eight spectral bands. Flux is conserved per band and sources remain spread across their real angular width.
+- A curved-Earth radiative-transfer kernel models Rayleigh, aerosol, humidity, cloud, cloud/ground feedback, two-leg extinction, and a bounded multiple-scattering approximation. A harmonic circular convolution turns the ring grid into a full directional sky field.
+- The expensive kernel and Fourier plan are cached in a Web Worker. Panning and zooming never recompute the model; atmosphere and location changes report real component progress while the UI remains responsive.
 - Astronomy Engine supplies time- and observer-specific positions for the Sun, Moon, and planets. The bundled CDS/VizieR Yale Bright Star Catalogue supplies 8,404 catalogued stars through visual magnitude 6.5, including J2000 positions, Johnson V and B−V photometry, and MK spectral classifications.
 - Stellar magnitude controls the point-spread size and intensity. B−V and spectral type set the intrinsic colour; air mass, aerosol, humidity, and cloud settings then add extinction, reddening, seeing halos, and chromatic atmospheric dispersion.
-- Sky quality, limiting magnitude, Milky Way visibility, stars, clusters, nebulae, planets, moonlight, and twilight all respond to the model.
+- Directional sky quality and limiting magnitude feed the visibility of stars, the Milky Way, clusters, nebulae, galaxies, and planets. Moonlight and twilight are applied separately.
 
-The light model is an exploratory visual estimate, not calibrated photometry or a substitute for an all-sky light-pollution survey. Public Overpass servers can occasionally time out; the interface falls back to a conservative baseline and retries whenever the pin moves.
+The complete equations, conservation rules, cache design, performance measurements, verification, and limitations are in [docs/physical-glow-model.md](docs/physical-glow-model.md). The light model is an exploratory relative-radiance estimate, not calibrated photometry or a substitute for an all-sky light-pollution survey. If a public Overpass server times out, the extended regional footprints remain active; the UI reports that local OSM refinement was unavailable instead of inventing a directional point source.
 
 Map and feature data © OpenStreetMap contributors, available under the ODbL.
 

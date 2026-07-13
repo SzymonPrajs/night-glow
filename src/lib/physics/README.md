@@ -36,15 +36,17 @@ visible influence of bright cities hundreds of kilometres away.
   `0.008569 lambda^-4 (1 + 0.0113 lambda^-2 + 0.00013 lambda^-4)`, with
   wavelength in micrometres, pressure scaling, and a depolarization-corrected
   Rayleigh phase function.
-- Aerosol optical depth follows the Angstrom law
+- The AOD input is a dry/reference-humidity baseline. Ambient aerosol optical depth follows the Angstrom law
   `tau_a(lambda) = tau_a(550) (lambda / 550 nm)^(-alpha)` and an exponential
   vertical profile. Hygroscopic growth uses the capped Hanel factor
   `[(1-RH_ref)/(1-RH)]^gamma`. A two-lobe Henyey-Greenstein phase function
   preserves a small but important aerosol backscatter component.
-- A fractional cloud layer contributes extinction and scattering along the
-  exact path through its spherical shell. Its phase function combines a
-  forward HG lobe with an isotropic internal-scattering term. A bounded
-  cloud-to-ground reflective loop contributes to higher scattering orders.
+- A fractional cloud layer is a horizontally uniform unresolved mean column.
+  It contributes extinction and scattering along the exact path through its
+  spherical shell, but it is not patchy 3-D cloud geometry. Its phase function
+  combines a forward HG lobe with an isotropic internal-scattering term.
+  Ground albedo is used only by a bounded empirical cloud-to-ground feedback;
+  there is no clear-sky surface-reflection path.
 
 The two-leg optical-depth columns are integrated independently from source to
 scatterer and scatterer to observer. Quadrature is concentrated near the
@@ -54,17 +56,22 @@ hundreds of kilometres long.
 ### Multiple scattering
 
 Successive orders use the reduced transport approximation
-`Ln = rho L(n-1)`. `rho` is inferred from contribution-weighted transport
+`Ln = rho L(n-1)`. Higher orders are scalar amplification of the first-order
+sightline and retain its angular shape; they are not spatially reintegrated.
+`rho` is inferred from contribution-weighted transport
 optical depth (including `1-g` for forward scattering), augmented by the
 cloud/ground loop, and strictly clamped below one. The Neumann series is thus
 convergent. It stops at a relative tolerance; if the configured order limit is
 hit first, the remaining geometric tail can be closed analytically. All public
 radiances are finite and non-negative.
 
-This is a fast physically based glow model, not a line-by-line Monte Carlo
-radiative-transfer solver. It intentionally omits terrain occlusion, resolved
-3-D clouds, vertical temperature profiles, polarization, ozone absorption, and
-wavelength structure inside a band.
+This is a fast physically based relative-glow model, not a line-by-line Monte
+Carlo radiative-transfer solver. Rays are straight and unrefracted. It
+intentionally omits terrain occlusion, resolved 3-D clouds, vertical
+temperature profiles, polarization, ozone absorption, and wavelength structure
+inside a band. Each band is evaluated only at its centre wavelength. Downstream
+RGB, SQM, Bortle, and limiting-magnitude mappings are heuristic, not calibrated
+photometry.
 
 ## Kernel precomputation and caching
 
@@ -93,6 +100,9 @@ O(rings * bands * harmonics * sectors
 ```
 
 rather than direct `O(elevations * rings * bands * sectors^2)` summation.
+The five-degree kernel resolves at most 36 harmonics; 720 bearings are smooth
+half-degree output samples rather than independent half-degree atmospheric
+resolution. Small negative Fourier ringing is clipped to zero.
 
 ## Minimal use
 
