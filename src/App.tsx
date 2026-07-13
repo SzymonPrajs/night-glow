@@ -30,10 +30,18 @@ const INITIAL_LOCATION: Location = {
 }
 
 const INITIAL_ATMOSPHERE: Atmosphere = {
-  aerosol: 0.28,
+  aerosol: 0.12,
   humidity: 0.45,
   cloud: 0.08,
   cloudBase: 6.5,
+  angstromExponent: 1.3,
+  aerosolScaleHeightKm: 1.4,
+  aerosolSingleScatteringAlbedo: 0.92,
+  aerosolAsymmetry: 0.68,
+  cloudThicknessKm: 1.8,
+  cloudOpticalDepth: 8,
+  groundAlbedo: 0.14,
+  maxScatteringOrder: 3,
 }
 
 const EMPTY_ANALYSIS: MapAnalysis = {

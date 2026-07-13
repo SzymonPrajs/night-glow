@@ -5,10 +5,22 @@ export type Location = {
 }
 
 export type Atmosphere = {
+  /** Aerosol optical depth at 550 nm. */
   aerosol: number
+  /** Relative humidity as a 0..1 fraction. */
   humidity: number
+  /** Fractional cloud coverage as a 0..1 fraction. */
   cloud: number
+  /** Cloud base above the observer in kilometres. */
   cloudBase: number
+  angstromExponent: number
+  aerosolScaleHeightKm: number
+  aerosolSingleScatteringAlbedo: number
+  aerosolAsymmetry: number
+  cloudThicknessKm: number
+  cloudOpticalDepth: number
+  groundAlbedo: number
+  maxScatteringOrder: number
 }
 
 export type LightSource = {

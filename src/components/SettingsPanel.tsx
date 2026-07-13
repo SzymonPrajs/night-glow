@@ -1,4 +1,4 @@
-import { Cloud, CloudFog, Droplets, Sparkles, Wind } from 'lucide-react'
+import { Activity, Cloud, CloudFog, Droplets, Gauge, Layers3, MountainSnow, Sparkles, SunMedium, Wind } from 'lucide-react'
 import type { Atmosphere } from '../types'
 
 type SettingsPanelProps = {
@@ -7,9 +7,30 @@ type SettingsPanelProps = {
 }
 
 const PRESETS: Array<{ name: string; values: Atmosphere }> = [
-  { name: 'Crisp', values: { aerosol: 0.12, humidity: 0.22, cloud: 0, cloudBase: 8 } },
-  { name: 'Humid', values: { aerosol: 0.48, humidity: 0.82, cloud: 0.16, cloudBase: 4.6 } },
-  { name: 'Low cloud', values: { aerosol: 0.55, humidity: 0.88, cloud: 0.72, cloudBase: 1.2 } },
+  {
+    name: 'Crisp',
+    values: {
+      aerosol: 0.04, humidity: 0.28, cloud: 0, cloudBase: 8, angstromExponent: 1.5,
+      aerosolScaleHeightKm: 1.2, aerosolSingleScatteringAlbedo: 0.91, aerosolAsymmetry: 0.62,
+      cloudThicknessKm: 1.5, cloudOpticalDepth: 4, groundAlbedo: 0.13, maxScatteringOrder: 2,
+    },
+  },
+  {
+    name: 'Humid',
+    values: {
+      aerosol: 0.22, humidity: 0.82, cloud: 0.12, cloudBase: 4.6, angstromExponent: 1.15,
+      aerosolScaleHeightKm: 1.8, aerosolSingleScatteringAlbedo: 0.94, aerosolAsymmetry: 0.74,
+      cloudThicknessKm: 2.2, cloudOpticalDepth: 7, groundAlbedo: 0.15, maxScatteringOrder: 4,
+    },
+  },
+  {
+    name: 'Low cloud',
+    values: {
+      aerosol: 0.3, humidity: 0.9, cloud: 0.78, cloudBase: 0.8, angstromExponent: 0.9,
+      aerosolScaleHeightKm: 0.75, aerosolSingleScatteringAlbedo: 0.96, aerosolAsymmetry: 0.8,
+      cloudThicknessKm: 1.3, cloudOpticalDepth: 28, groundAlbedo: 0.16, maxScatteringOrder: 5,
+    },
+  },
 ]
 
 export default function SettingsPanel({ atmosphere, onChange }: SettingsPanelProps) {
@@ -31,11 +52,11 @@ export default function SettingsPanel({ atmosphere, onChange }: SettingsPanelPro
       <div className="sliders">
         <Slider
           icon={<Wind size={15} />}
-          label="Aerosol haze"
+          label="Aerosol optical depth"
           value={atmosphere.aerosol}
-          display={`${Math.round(atmosphere.aerosol * 100)}%`}
-          min={0}
-          max={1}
+          display={atmosphere.aerosol.toFixed(2)}
+          min={0.02}
+          max={0.8}
           step={0.01}
           onChange={(value) => set('aerosol', value)}
         />
@@ -69,11 +90,95 @@ export default function SettingsPanel({ atmosphere, onChange }: SettingsPanelPro
           step={0.1}
           onChange={(value) => set('cloudBase', value)}
         />
+
+        <div className="settings-section"><span>Particle optics</span><i /></div>
+        <Slider
+          icon={<Activity size={15} />}
+          label="Ångström exponent"
+          value={atmosphere.angstromExponent}
+          display={atmosphere.angstromExponent.toFixed(2)}
+          min={0}
+          max={2.5}
+          step={0.05}
+          onChange={(value) => set('angstromExponent', value)}
+        />
+        <Slider
+          icon={<Layers3 size={15} />}
+          label="Aerosol scale height"
+          value={atmosphere.aerosolScaleHeightKm}
+          display={`${atmosphere.aerosolScaleHeightKm.toFixed(1)} km`}
+          min={0.3}
+          max={4}
+          step={0.1}
+          onChange={(value) => set('aerosolScaleHeightKm', value)}
+        />
+        <Slider
+          icon={<SunMedium size={15} />}
+          label="Single-scatter albedo"
+          value={atmosphere.aerosolSingleScatteringAlbedo}
+          display={atmosphere.aerosolSingleScatteringAlbedo.toFixed(2)}
+          min={0.7}
+          max={1}
+          step={0.01}
+          onChange={(value) => set('aerosolSingleScatteringAlbedo', value)}
+        />
+        <Slider
+          icon={<Gauge size={15} />}
+          label="Forward asymmetry"
+          value={atmosphere.aerosolAsymmetry}
+          display={atmosphere.aerosolAsymmetry.toFixed(2)}
+          min={0.45}
+          max={0.9}
+          step={0.01}
+          onChange={(value) => set('aerosolAsymmetry', value)}
+        />
+
+        <div className="settings-section"><span>Cloud & surface</span><i /></div>
+        <Slider
+          icon={<CloudFog size={15} />}
+          label="Cloud thickness"
+          value={atmosphere.cloudThicknessKm}
+          display={`${atmosphere.cloudThicknessKm.toFixed(1)} km`}
+          min={0.2}
+          max={8}
+          step={0.1}
+          onChange={(value) => set('cloudThicknessKm', value)}
+        />
+        <Slider
+          icon={<Cloud size={15} />}
+          label="Cloud optical depth"
+          value={atmosphere.cloudOpticalDepth}
+          display={atmosphere.cloudOpticalDepth.toFixed(0)}
+          min={0}
+          max={80}
+          step={1}
+          onChange={(value) => set('cloudOpticalDepth', value)}
+        />
+        <Slider
+          icon={<MountainSnow size={15} />}
+          label="Ground albedo"
+          value={atmosphere.groundAlbedo}
+          display={atmosphere.groundAlbedo.toFixed(2)}
+          min={0.04}
+          max={0.85}
+          step={0.01}
+          onChange={(value) => set('groundAlbedo', value)}
+        />
+        <Slider
+          icon={<Layers3 size={15} />}
+          label="Scattering orders"
+          value={atmosphere.maxScatteringOrder}
+          display={`${atmosphere.maxScatteringOrder}`}
+          min={1}
+          max={6}
+          step={1}
+          onChange={(value) => set('maxScatteringOrder', value)}
+        />
       </div>
 
       <div className="model-note">
         <Sparkles size={15} />
-        <span>Low clouds amplify nearby glow; haze and humidity spread it higher across the dome.</span>
+        <span>Every control feeds the spectral transfer kernel. Humidity changes aerosol optics; clouds can brighten local light while extinguishing distant light.</span>
       </div>
     </>
   )
