@@ -27,10 +27,12 @@ const ROAD_FACTOR: Record<string, number> = {
 }
 
 const PLACE_FLUX: Record<string, number> = {
-  city: 72,
-  town: 22,
-  village: 4,
+  city: 1.2,
+  town: 0.9,
 }
+
+const LOCAL_DETAIL_RADIUS_KM = 15
+const REGIONAL_SETTLEMENT_RADIUS_KM = 300
 
 const ESTIMATED_LANDUSE_AREA: Record<string, number> = {
   residential: 0.22,
@@ -44,13 +46,13 @@ export async function analyzeOpenMap(
   signal?: AbortSignal,
   onProgress?: (progress: number, stage: string) => void,
 ): Promise<MapAnalysis> {
-  const query = `[out:json][timeout:20];
-way["landuse"~"^(residential|industrial|commercial|retail)$"](around:9000,${location.lat},${location.lon})->.land;
-way["highway"~"^(motorway|trunk|primary|secondary)$"](around:9000,${location.lat},${location.lon})->.roads;
-node["place"~"^(city|town|village)$"](around:38000,${location.lat},${location.lon})->.places;
-.places out center 80;
-.land out center geom 340;
-.roads out center geom 340;`
+  const query = `[out:json][timeout:36];
+way["landuse"~"^(residential|industrial|commercial|retail)$"](around:${LOCAL_DETAIL_RADIUS_KM * 1000},${location.lat},${location.lon})->.land;
+way["highway"~"^(motorway|trunk|primary|secondary)$"](around:${LOCAL_DETAIL_RADIUS_KM * 1000},${location.lat},${location.lon})->.roads;
+node["place"~"^(city|town)$"](around:${REGIONAL_SETTLEMENT_RADIUS_KM * 1000},${location.lat},${location.lon})->.places;
+.places out center 1600;
+.land out center geom 900;
+.roads out center geom 900;`
   const endpoints = [
     'https://overpass-api.de/api/interpreter',
     'https://overpass.kumi.systems/api/interpreter',
@@ -109,7 +111,8 @@ function processElements(location: Location, elements: OsmElement[]): MapAnalysi
         name: tags.name || `${titleCase(tags.landuse)} area`,
         category: 'built',
         center,
-        flux: Math.pow(area, 0.78) * LANDUSE_FACTOR[tags.landuse] * 5.4,
+        // Emission is additive: equal land-use areas at equal density emit equal power.
+        flux: area * LANDUSE_FACTOR[tags.landuse] * 5.4,
         areaKm2: area,
       }))
     }
@@ -123,7 +126,7 @@ function processElements(location: Location, elements: OsmElement[]): MapAnalysi
         name: tags.name || `${titleCase(tags.highway)} road`,
         category: 'road',
         center,
-        flux: Math.pow(length, 0.72) * ROAD_FACTOR[tags.highway] * 1.7,
+        flux: length * ROAD_FACTOR[tags.highway] * 1.7,
         lengthKm: length,
       }))
     }
@@ -133,7 +136,7 @@ function processElements(location: Location, elements: OsmElement[]): MapAnalysi
       const estimatedArea = population > 0
         ? population / (tags.place === 'city' ? 4200 : tags.place === 'town' ? 3000 : 1700)
         : tags.place === 'city' ? 120 : tags.place === 'town' ? 18 : 2.4
-      const base = population > 0 ? Math.min(150, Math.pow(population / 700, 0.58)) : PLACE_FLUX[tags.place]
+      const base = estimatedArea * PLACE_FLUX[tags.place]
       places.push(makeSource(location, {
         id: `place-${element.id}`,
         name: tags.name || titleCase(tags.place),
@@ -145,7 +148,10 @@ function processElements(location: Location, elements: OsmElement[]): MapAnalysi
     }
   }
 
-  // Distant city/town anchors and the largest local emitters best describe the horizon.
+  // Regional place nodes describe settlements beyond the detailed local geometry.
+  // Keeping the two ranges disjoint prevents a nearby city being counted twice.
+  const regionalPlaces = places.filter((place) => place.distanceKm >= LOCAL_DETAIL_RADIUS_KM)
+
   if (builtAreaKm2 < 0.1) {
     builtAreaKm2 = places
       .filter((place) => place.distanceKm < 18)
@@ -153,9 +159,9 @@ function processElements(location: Location, elements: OsmElement[]): MapAnalysi
   }
 
   const sources = [
-    ...places.sort((a, b) => b.flux - a.flux).slice(0, 14),
-    ...built.sort((a, b) => b.flux - a.flux).slice(0, 54),
-    ...roads.sort((a, b) => b.flux - a.flux).slice(0, 30),
+    ...regionalPlaces,
+    ...built,
+    ...roads,
   ]
 
   return {
@@ -193,23 +199,15 @@ function makeSource(location: Location, input: {
 }
 
 export function fallbackAnalysis(location: Location, message: string): MapAnalysis {
+  void location
   return {
     status: 'fallback',
     progress: 100,
-    stage: 'Baseline ready',
-    sources: [{
-      id: 'baseline',
-      name: 'Local settlement baseline',
-      category: 'place',
-      lat: location.lat,
-      lon: location.lon,
-      bearing: 180,
-      distanceKm: 0.8,
-      flux: 3,
-    }],
+    stage: 'No directional map data',
+    sources: [],
     builtAreaKm2: 0,
     roadLengthKm: 0,
-    message,
+    message: `${message} No directional source was invented.`,
   }
 }
 
