@@ -114,6 +114,7 @@ function processElements(location: Location, elements: OsmElement[]): MapAnalysi
         // Emission is additive: equal land-use areas at equal density emit equal power.
         flux: area * LANDUSE_FACTOR[tags.landuse] * 5.4,
         areaKm2: area,
+        geometry: { type: 'polygon', points: geometry },
       }))
     }
 
@@ -128,6 +129,7 @@ function processElements(location: Location, elements: OsmElement[]): MapAnalysi
         center,
         flux: length * ROAD_FACTOR[tags.highway] * 1.7,
         lengthKm: length,
+        geometry: { type: 'line', points: geometry },
       }))
     }
 
@@ -144,6 +146,7 @@ function processElements(location: Location, elements: OsmElement[]): MapAnalysi
         center,
         flux: base,
         areaKm2: estimatedArea,
+        population,
       }))
     }
   }
@@ -183,6 +186,8 @@ function makeSource(location: Location, input: {
   flux: number
   areaKm2?: number
   lengthKm?: number
+  geometry?: LightSource['geometry']
+  population?: number
 }): LightSource {
   return {
     id: input.id,
@@ -195,6 +200,9 @@ function makeSource(location: Location, input: {
     flux: input.flux,
     areaKm2: input.areaKm2,
     lengthKm: input.lengthKm,
+    geometry: input.geometry,
+    population: input.population,
+    provenance: 'OpenStreetMap contributors',
   }
 }
 

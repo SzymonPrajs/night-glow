@@ -34,6 +34,12 @@ export type LightSource = {
   flux: number
   areaKm2?: number
   lengthKm?: number
+  geometry?: {
+    type: 'polygon' | 'line'
+    points: Array<{ lat: number; lon: number }>
+  }
+  population?: number
+  provenance?: string
 }
 
 export type MapAnalysis = {
