@@ -5,6 +5,7 @@ import { STAR_CATALOG } from '../data/starCatalog'
 import { equatorialToHorizontal, galacticToEquatorial, horizontalVector, type HorizontalObject } from '../lib/astronomy'
 import { physicalZenithSample, samplePhysicalGlow } from '../lib/physicalGlowField'
 import type { PhysicalGlowResult } from '../lib/physicalGlowProtocol'
+import { buildPhysicalGlowRenderGrid } from '../lib/physicalGlowRender'
 import { clamp } from '../lib/skyModel'
 import { starAppearance } from '../lib/starAppearance'
 import { createLabelTexture, createOrbTexture, MILKY_WAY_POINTS } from '../lib/starField'
@@ -455,7 +456,8 @@ function rebuildPhysicalGlows(refs: SceneRefs, field?: PhysicalGlowResult) {
   clearGroup(refs.glowGroup)
   if (!field?.rgbRadiance.length) return
 
-  const altitudes = field.elevationDeg
+  const renderField = buildPhysicalGlowRenderGrid(field)
+  const altitudes = renderField.elevationDeg
   const positions: number[] = []
   const radiance: number[] = []
   const indices: number[] = []
@@ -470,9 +472,9 @@ function rebuildPhysicalGlows(refs: SceneRefs, field?: PhysicalGlowResult) {
       const source = (level * sampleCount + sourceBearing) * 3
       positions.push(position.x, position.y, position.z)
       radiance.push(
-        field.rgbRadiance[source],
-        field.rgbRadiance[source + 1],
-        field.rgbRadiance[source + 2],
+        renderField.rgbRadiance[source],
+        renderField.rgbRadiance[source + 1],
+        renderField.rgbRadiance[source + 2],
       )
     }
   }
@@ -513,9 +515,7 @@ function rebuildPhysicalGlows(refs: SceneRefs, field?: PhysicalGlowResult) {
       uniform float uExposure;
       void main() {
         vec3 mapped = vec3(1.0) - exp(-max(vRadiance, vec3(0.0)) * uExposure);
-        float intensity = max(mapped.r, max(mapped.g, mapped.b));
-        if (intensity < .0005) discard;
-        gl_FragColor = vec4(mapped / intensity, intensity * .82);
+        gl_FragColor = vec4(mapped, .82);
       }
     `,
   })

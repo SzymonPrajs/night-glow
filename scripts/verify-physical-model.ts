@@ -17,6 +17,7 @@ import {
   createRingEmissionField,
 } from '../src/lib/physics'
 import type { EllipseEmissionSource, EmissionGrid } from '../src/lib/emission'
+import { buildPhysicalGlowRenderGrid } from '../src/lib/physicalGlowRender'
 
 const observer = { lat: 51.5329, lon: 18.9390 }
 const regionalSources = createRegionalSettlementSources()
@@ -33,6 +34,29 @@ assert.equal(regionalGrid.sectorCount, 720)
 assert.equal(regionalGrid.bands.length, 8)
 assert(regionalGrid.diagnostics.conservation.maxRelativeError < 1e-9)
 assert(lodzGrid.diagnostics.conservation.maxRelativeError < 1e-9)
+
+const renderFixture = buildPhysicalGlowRenderGrid({
+  azimuthCount: 2,
+  elevationDeg: new Float32Array([0, 2, 5, 10, 20, 45, 90]),
+  rgbRadiance: new Float32Array([
+    1, 0.8, 0.6, 0.5, 0.4, 0.3,
+    0.7, 0.56, 0.42, 0.35, 0.28, 0.21,
+    0.4, 0.32, 0.24, 0.2, 0.16, 0.12,
+    0.2, 0.16, 0.12, 0.1, 0.08, 0.06,
+    0.08, 0.064, 0.048, 0.04, 0.032, 0.024,
+    0.02, 0.016, 0.012, 0.01, 0.008, 0.006,
+    0.005, 0.004, 0.003, 0.0025, 0.002, 0.0015,
+  ]),
+})
+assert(maximumElevationStep(renderFixture.elevationDeg, 0, 10) <= 0.25001)
+assert(maximumElevationStep(renderFixture.elevationDeg, 10, 30) <= 0.50001)
+assert(maximumElevationStep(renderFixture.elevationDeg, 30, 60) <= 1.00001)
+assert(maximumElevationStep(renderFixture.elevationDeg, 60, 90) <= 2.00001)
+assert.deepEqual(
+  Array.from(renderFixture.elevationDeg).filter((value) => [0, 2, 5, 10, 20, 45, 90].includes(value)),
+  [0, 2, 5, 10, 20, 45, 90],
+)
+assertFiniteNonNegative(renderFixture.rgbRadiance, 'Densified render radiance')
 
 const footprint = occupiedCells(lodzGrid)
 const expectedBearing = bearingDegrees(observer, lodz.center)
@@ -187,6 +211,8 @@ const result = {
     cardinalPeakErrors,
     asyncKernelCancellationChecks: cancellationChecks,
     finiteNonNegative: true,
+    renderElevationRows: renderFixture.elevationDeg.length,
+    renderHorizonStepDeg: maximumElevationStep(renderFixture.elevationDeg, 0, 10),
   },
   performanceMs: {
     emission: emissionMs,
@@ -327,6 +353,15 @@ function assertFiniteNonNegative(values: Float32Array, label: string) {
   for (let index = 0; index < values.length; index += 1) {
     assert(Number.isFinite(values[index]) && values[index] >= 0, `${label} contains an invalid value at ${index}`)
   }
+}
+
+function maximumElevationStep(elevations: Float32Array, minimum: number, maximum: number) {
+  let largest = 0
+  for (let index = 1; index < elevations.length; index += 1) {
+    if (elevations[index] <= minimum || elevations[index - 1] >= maximum) continue
+    largest = Math.max(largest, elevations[index] - elevations[index - 1])
+  }
+  return largest
 }
 
 function angularDistance(left: number, right: number) {
