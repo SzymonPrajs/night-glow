@@ -6,10 +6,11 @@ type LocationMapProps = {
   location: Location
   sources: LightSource[]
   status: MapAnalysis['status']
+  heading: number
   onChange: (location: Location) => void
 }
 
-export default function LocationMap({ location, sources, status, onChange }: LocationMapProps) {
+export default function LocationMap({ location, sources, status, heading, onChange }: LocationMapProps) {
   const elementRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const markerRef = useRef<L.Marker | null>(null)
@@ -35,9 +36,9 @@ export default function LocationMap({ location, sources, status, onChange }: Loc
     const marker = L.marker([initialLocation.lat, initialLocation.lon], {
       icon: L.divIcon({
         className: 'observer-marker-wrap',
-        html: '<span class="observer-marker"><span></span></span>',
-        iconSize: [28, 28],
-        iconAnchor: [14, 14],
+        html: '<span class="observer-marker"><span class="observer-direction"><i></i></span><span class="observer-dot"></span></span>',
+        iconSize: [42, 42],
+        iconAnchor: [21, 21],
       }),
     }).addTo(map)
     const sourceLayer = L.layerGroup().addTo(map)
@@ -67,6 +68,11 @@ export default function LocationMap({ location, sources, status, onChange }: Loc
       map.panTo([location.lat, location.lon])
     }
   }, [location])
+
+  useEffect(() => {
+    const arrow = markerRef.current?.getElement()?.querySelector<HTMLElement>('.observer-direction')
+    if (arrow) arrow.style.transform = `rotate(${heading}deg)`
+  }, [heading])
 
   useEffect(() => {
     const layer = sourceLayerRef.current

@@ -164,7 +164,7 @@ export default function App() {
             onPinnedChange={setMapPin}
             onClose={() => { setMapPinned(false); setMapOpen(false) }}
           />
-          <LocationMap location={location} sources={analysis.sources} status={analysis.status} onChange={setLocation} />
+          <LocationMap location={location} sources={analysis.sources} status={analysis.status} heading={view.azimuth} onChange={setLocation} />
           <div className="coordinates">
             <LocateFixed size={14} />
             <span>{location.lat.toFixed(4)}° {location.lat >= 0 ? 'N' : 'S'}</span>

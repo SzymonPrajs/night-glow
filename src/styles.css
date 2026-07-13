@@ -193,8 +193,12 @@ button { color: inherit; }
 .leaflet-tooltip { border: 1px solid rgba(180, 207, 238, .16); background: rgba(6, 12, 23, .92); color: #e8f3ff; box-shadow: 0 8px 24px rgba(0,0,0,.3); border-radius: 7px; font-size: 10px; }
 
 .observer-marker-wrap { background: transparent; border: 0; }
-.observer-marker { display: block; width: 28px; height: 28px; border-radius: 50%; border: 1px solid rgba(178, 219, 255, .75); background: rgba(52, 131, 210, .16); box-shadow: 0 0 0 6px rgba(67, 142, 218, .09), 0 0 24px rgba(85, 169, 255, .55); }
-.observer-marker span { position: absolute; width: 8px; height: 8px; border-radius: 50%; left: 10px; top: 10px; background: #d9eeff; box-shadow: 0 0 10px #8dcaff; }
+.observer-marker { position: relative; display: block; width: 42px; height: 42px; }
+.observer-marker::before { content: ''; position: absolute; width: 28px; height: 28px; left: 7px; top: 7px; border-radius: 50%; border: 1px solid rgba(178, 219, 255, .75); background: rgba(52, 131, 210, .16); box-shadow: 0 0 0 6px rgba(67, 142, 218, .09), 0 0 24px rgba(85, 169, 255, .55); }
+.observer-dot { position: absolute; z-index: 2; width: 8px; height: 8px; border-radius: 50%; left: 17px; top: 17px; background: #d9eeff; box-shadow: 0 0 10px #8dcaff; }
+.observer-direction { position: absolute; z-index: 1; left: 20px; top: -8px; width: 2px; height: 29px; transform-origin: 1px 29px; transition: transform .08s linear; }
+.observer-direction::before { content: ''; position: absolute; inset: 5px 0 0; border-radius: 2px; background: linear-gradient(to bottom, #ffd38a, rgba(255, 184, 92, .3)); box-shadow: 0 0 7px rgba(255, 184, 92, .55); }
+.observer-direction::after { content: ''; position: absolute; left: -4px; top: 1px; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 8px solid #ffd38a; filter: drop-shadow(0 0 4px rgba(255, 184, 92, .65)); }
 
 .map-hint { position: absolute; z-index: 500; left: 8px; top: 8px; padding: 5px 8px; border: 1px solid rgba(177, 207, 241, .12); border-radius: 6px; background: rgba(4, 10, 18, .78); color: #9babc1; font-size: 9px; pointer-events: none; }
 .map-loading { position: absolute; z-index: 600; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; background: rgba(4, 9, 17, .58); backdrop-filter: blur(2px); font-size: 10px; color: #c3d7ee; }
@@ -348,5 +352,5 @@ button { color: inherit; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .glass-panel { transition: none; }
+  .glass-panel, .observer-direction { transition: none; }
 }
