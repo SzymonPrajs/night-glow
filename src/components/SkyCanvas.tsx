@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { BRIGHT_STARS, DEEP_SKY } from '../data/celestial'
+import { STAR_CATALOG } from '../data/starCatalog'
 import { equatorialToHorizontal, galacticToEquatorial, horizontalVector, type HorizontalObject } from '../lib/astronomy'
 import { buildHorizonRadiance, clamp } from '../lib/skyModel'
-import { bvToColor, createLabelTexture, createOrbTexture, FAINT_STARS, MILKY_WAY_POINTS } from '../lib/starField'
+import { starAppearance } from '../lib/starAppearance'
+import { createLabelTexture, createOrbTexture, MILKY_WAY_POINTS } from '../lib/starField'
 import type { Atmosphere, LightSource, Location, SkyMetrics } from '../types'
 
 type ViewState = { azimuth: number; altitude: number; fov: number }
@@ -53,6 +55,56 @@ const pointFragmentShader = `
     float d = length(gl_PointCoord - vec2(.5));
     float alpha = smoothstep(.5, .06, d) * vOpacity;
     gl_FragColor = vec4(vColor, alpha);
+  }
+`
+
+const starVertexShader = `
+  attribute float aSize;
+  attribute float aOpacity;
+  attribute float aCoreWidth;
+  attribute float aHaloWidth;
+  attribute float aHaloStrength;
+  attribute float aDispersion;
+  varying vec3 vColor;
+  varying float vOpacity;
+  varying float vCoreWidth;
+  varying float vHaloWidth;
+  varying float vHaloStrength;
+  varying float vDispersion;
+  uniform float uPixelRatio;
+  void main() {
+    vColor = color;
+    vOpacity = aOpacity;
+    vCoreWidth = aCoreWidth;
+    vHaloWidth = aHaloWidth;
+    vHaloStrength = aHaloStrength;
+    vDispersion = aDispersion;
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    gl_Position = projectionMatrix * mvPosition;
+    gl_PointSize = max(1.0, aSize * uPixelRatio);
+  }
+`
+
+const starFragmentShader = `
+  varying vec3 vColor;
+  varying float vOpacity;
+  varying float vCoreWidth;
+  varying float vHaloWidth;
+  varying float vHaloStrength;
+  varying float vDispersion;
+  float gaussian(float radius, float sigma) {
+    return exp(-0.5 * radius * radius / max(sigma * sigma, 0.0001));
+  }
+  void main() {
+    vec2 point = (gl_PointCoord - vec2(.5)) * 2.0;
+    float redCore = gaussian(length(point - vec2(0.0, vDispersion)), vCoreWidth);
+    float greenCore = gaussian(length(point), vCoreWidth);
+    float blueCore = gaussian(length(point + vec2(0.0, vDispersion)), vCoreWidth);
+    float halo = gaussian(length(point), vHaloWidth) * vHaloStrength;
+    vec3 profile = vColor * (vec3(redCore, greenCore, blueCore) + halo);
+    float intensity = max(profile.r, max(profile.g, profile.b));
+    if (intensity < .002 || vOpacity <= 0.0) discard;
+    gl_FragColor = vec4(profile / max(intensity, .001), min(1.0, intensity * vOpacity));
   }
 `
 
@@ -185,7 +237,7 @@ export default function SkyCanvas({
     refs.skyMaterial.uniforms.uCloud.value = atmosphere.cloud
     refs.skyMaterial.uniforms.uHumidity.value = atmosphere.humidity
     refs.skyMaterial.uniforms.uSunAltitude.value = sun?.altitude ?? -30
-    rebuildStars(refs, location, date, metrics)
+    rebuildStars(refs, location, date, metrics, atmosphere)
     rebuildMilkyWay(refs, location, date, metrics, atmosphere)
     rebuildDeepSky(refs, location, date, metrics)
     rebuildSolarSystem(refs, solarSystem, metrics)
@@ -244,29 +296,39 @@ export default function SkyCanvas({
   )
 }
 
-function rebuildStars(refs: SceneRefs, location: Location, date: Date, metrics: SkyMetrics) {
+function rebuildStars(refs: SceneRefs, location: Location, date: Date, metrics: SkyMetrics, atmosphere: Atmosphere) {
   clearGroup(refs.starGroup)
-  const allStars = [...BRIGHT_STARS, ...FAINT_STARS]
   const positions: number[] = []
   const colors: number[] = []
   const sizes: number[] = []
-  const opacity: number[] = []
-  for (const star of allStars) {
+  const opacities: number[] = []
+  const coreWidths: number[] = []
+  const haloWidths: number[] = []
+  const haloStrengths: number[] = []
+  const dispersions: number[] = []
+  for (const star of STAR_CATALOG) {
     const horizontal = equatorialToHorizontal(star.ra, star.dec, date, location)
     const vector = horizontalVector(horizontal.azimuth, horizontal.altitude, 102)
-    const color = bvToColor(star.color)
-    const visible = smoothVisibility(star.mag, metrics.limitingMagnitude)
+    const appearance = starAppearance(star, horizontal.altitude, metrics.limitingMagnitude, atmosphere)
     positions.push(vector.x, vector.y, vector.z)
-    colors.push(color.r, color.g, color.b)
-    sizes.push(clamp(5.8 - star.mag * 0.6, 1.1, 7.2))
-    opacity.push(visible)
+    colors.push(appearance.color.r, appearance.color.g, appearance.color.b)
+    sizes.push(appearance.size)
+    opacities.push(appearance.opacity)
+    coreWidths.push(appearance.coreWidth)
+    haloWidths.push(appearance.haloWidth)
+    haloStrengths.push(appearance.haloStrength)
+    dispersions.push(appearance.dispersion)
   }
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
   geometry.setAttribute('aSize', new THREE.Float32BufferAttribute(sizes, 1))
-  geometry.setAttribute('aOpacity', new THREE.Float32BufferAttribute(opacity, 1))
-  const material = makePointMaterial(refs.renderer)
+  geometry.setAttribute('aOpacity', new THREE.Float32BufferAttribute(opacities, 1))
+  geometry.setAttribute('aCoreWidth', new THREE.Float32BufferAttribute(coreWidths, 1))
+  geometry.setAttribute('aHaloWidth', new THREE.Float32BufferAttribute(haloWidths, 1))
+  geometry.setAttribute('aHaloStrength', new THREE.Float32BufferAttribute(haloStrengths, 1))
+  geometry.setAttribute('aDispersion', new THREE.Float32BufferAttribute(dispersions, 1))
+  const material = makeStarMaterial(refs.renderer)
   refs.starGroup.add(new THREE.Points(geometry, material))
 
   for (const star of BRIGHT_STARS.filter((item) => item.mag < 1.65 && item.mag < metrics.limitingMagnitude)) {
@@ -429,6 +491,18 @@ function makePointMaterial(renderer: THREE.WebGLRenderer, blending: THREE.Blendi
   })
 }
 
+function makeStarMaterial(renderer: THREE.WebGLRenderer) {
+  return new THREE.ShaderMaterial({
+    vertexColors: true,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    uniforms: { uPixelRatio: { value: Math.min(renderer.getPixelRatio(), 2) } },
+    vertexShader: starVertexShader,
+    fragmentShader: starFragmentShader,
+  })
+}
+
 function makeLabel(text: string, accent: string) {
   const { texture, aspect } = createLabelTexture(text, accent)
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false, opacity: 0.92 }))
@@ -484,10 +558,6 @@ function planetStyle(name: string) {
     Neptune: { color: '#8faeff', halo: 'rgba(90, 126, 238, .25)' },
   }
   return styles[name] ?? { color: '#ffffff', halo: 'rgba(255,255,255,.2)' }
-}
-
-function smoothVisibility(magnitude: number, limit: number) {
-  return clamp((limit - magnitude + 0.35) / 0.7, 0, 1) * clamp(1.15 - magnitude * 0.06, 0.5, 1)
 }
 
 function emitView(camera: THREE.PerspectiveCamera, yaw: number, pitch: number, callback: (view: ViewState) => void) {

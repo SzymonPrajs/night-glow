@@ -1,18 +1,8 @@
 import * as THREE from 'three'
 
-export type FaintStar = { ra: number; dec: number; mag: number; color: number }
 export type MilkyWayPoint = { longitude: number; latitude: number; intensity: number }
 
-export const FAINT_STARS = makeFaintStars(3100)
 export const MILKY_WAY_POINTS = makeMilkyWay(4200)
-
-export function bvToColor(bv: number) {
-  if (bv < -0.1) return new THREE.Color('#b7d8ff')
-  if (bv < 0.25) return new THREE.Color('#d7e7ff')
-  if (bv < 0.65) return new THREE.Color('#fff4dc')
-  if (bv < 1.15) return new THREE.Color('#ffd7a1')
-  return new THREE.Color('#ffab72')
-}
 
 export function createLabelTexture(text: string, accent = '#dbeaff') {
   const canvas = document.createElement('canvas')
@@ -53,20 +43,6 @@ export function createOrbTexture(color: string, halo: string) {
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
   return texture
-}
-
-function makeFaintStars(count: number): FaintStar[] {
-  const random = mulberry32(40771)
-  return Array.from({ length: count }, () => {
-    const dec = (Math.asin(random() * 2 - 1) * 180) / Math.PI
-    const distribution = Math.pow(random(), 0.44)
-    return {
-      ra: random() * 24,
-      dec,
-      mag: 2.05 + distribution * 5.1,
-      color: -0.15 + random() * 1.55,
-    }
-  })
 }
 
 function makeMilkyWay(count: number): MilkyWayPoint[] {
