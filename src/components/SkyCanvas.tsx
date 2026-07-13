@@ -223,8 +223,8 @@ export default function SkyCanvas({
         if (!drag || drag.pointer !== event.pointerId) return
         const dx = event.clientX - drag.x
         const dy = event.clientY - drag.y
-        yawRef.current -= dx * 0.0045
-        pitchRef.current = clamp(pitchRef.current - dy * 0.004, -0.2, 1.45)
+        yawRef.current += dx * 0.0045
+        pitchRef.current = clamp(pitchRef.current + dy * 0.004, -0.2, 1.45)
         draggingRef.current = { ...drag, x: event.clientX, y: event.clientY }
         updateView()
       }}
