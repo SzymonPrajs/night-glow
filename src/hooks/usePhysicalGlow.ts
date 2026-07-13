@@ -62,12 +62,14 @@ export function usePhysicalGlow(
   const workerRef = useRef<Worker | null>(null)
   const requestIdRef = useRef(0)
   const activeRequestRef = useRef<number | null>(null)
-  const sentEmissionKeysRef = useRef(new Set<string>())
+  const confirmedEmissionKeysRef = useRef(new Set<string>())
+  const activeEmissionRef = useRef<{ requestId: number; cacheKey: string } | null>(null)
 
   useEffect(() => {
     const worker = new Worker(new URL('../workers/physicalGlow.worker.ts', import.meta.url), { type: 'module' })
     workerRef.current = worker
-    sentEmissionKeysRef.current = new Set()
+    confirmedEmissionKeysRef.current = new Set()
+    activeEmissionRef.current = null
     worker.onmessage = (event: MessageEvent<PhysicalGlowWorkerMessage>) => {
       const message = event.data
       if (message.requestId !== activeRequestRef.current) return
@@ -83,6 +85,10 @@ export function usePhysicalGlow(
           error: undefined,
         }))
       } else if (message.type === 'result') {
+        const activeEmission = activeEmissionRef.current
+        if (activeEmission?.requestId === message.requestId) {
+          confirmedEmissionKeysRef.current.add(activeEmission.cacheKey)
+        }
         setState((current) => ({
           ...current,
           status: 'live',
@@ -114,6 +120,7 @@ export function usePhysicalGlow(
       worker.terminate()
       workerRef.current = null
       activeRequestRef.current = null
+      activeEmissionRef.current = null
     }
   }, [])
 
@@ -149,7 +156,10 @@ export function usePhysicalGlow(
         })
         const emissionBuildMs = performance.now() - started
         const emissionCacheKey = makeEmissionCacheKey(location, mappedSources)
-        const cached = sentEmissionKeysRef.current.has(emissionCacheKey)
+        // A posted inline request may be cancelled during its debounce before
+        // the worker has installed the field. Only a completed result confirms
+        // that a cache-only follow-up is safe.
+        const cached = confirmedEmissionKeysRef.current.has(emissionCacheKey)
         const protocolGrid = cached ? undefined : toProtocolGrid(emission)
         const request: PhysicalGlowAnalyzeRequest = {
           type: 'analyze',
@@ -171,8 +181,8 @@ export function usePhysicalGlow(
           },
         }
         const transfer = protocolGrid ? transferableBuffers(protocolGrid) : []
+        activeEmissionRef.current = { requestId, cacheKey: emissionCacheKey }
         worker.postMessage(request, transfer)
-        sentEmissionKeysRef.current.add(emissionCacheKey)
         setState((current) => ({
           ...current,
           emissionBuildMs,
