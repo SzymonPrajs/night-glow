@@ -1,6 +1,7 @@
 export * from './diagnostics'
 export * from './geo'
 export * from './grid'
+export * from './osm'
 export * from './rasterize'
 export * from './regional'
 export * from './rings'
