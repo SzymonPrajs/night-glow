@@ -26,6 +26,8 @@ export type LightSource = {
 
 export type MapAnalysis = {
   status: 'idle' | 'loading' | 'live' | 'fallback' | 'error'
+  progress: number
+  stage: string
   sources: LightSource[]
   builtAreaKm2: number
   roadLengthKm: number

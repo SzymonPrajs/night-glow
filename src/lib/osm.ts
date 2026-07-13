@@ -39,7 +39,11 @@ const ESTIMATED_LANDUSE_AREA: Record<string, number> = {
   retail: 0.09,
 }
 
-export async function analyzeOpenMap(location: Location, signal?: AbortSignal): Promise<MapAnalysis> {
+export async function analyzeOpenMap(
+  location: Location,
+  signal?: AbortSignal,
+  onProgress?: (progress: number, stage: string) => void,
+): Promise<MapAnalysis> {
   const query = `[out:json][timeout:20];
 way["landuse"~"^(residential|industrial|commercial|retail)$"](around:9000,${location.lat},${location.lon})->.land;
 way["highway"~"^(motorway|trunk|primary|secondary)$"](around:9000,${location.lat},${location.lon})->.roads;
@@ -55,6 +59,7 @@ node["place"~"^(city|town|village)$"](around:38000,${location.lat},${location.lo
   const abortGroup = () => groupController.abort()
   signal?.addEventListener('abort', abortGroup, { once: true })
   try {
+    onProgress?.(14, 'Querying nearby map features')
     const data = await Promise.any(endpoints.map(async (endpoint) => {
       const response = await fetchWithTimeout(endpoint, {
         method: 'POST',
@@ -62,11 +67,16 @@ node["place"~"^(city|town|village)$"](around:38000,${location.lat},${location.lo
         headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
       }, groupController.signal, 24_000)
       if (!response.ok) throw new Error(`OpenStreetMap analysis returned ${response.status}`)
+      onProgress?.(62, 'Downloading mapped features')
       const payload = (await response.json()) as { elements: OsmElement[]; remark?: string }
       if (payload.remark && !payload.elements.length) throw new Error('OpenStreetMap survey timed out')
       return payload
     }))
-    return processElements(location, data.elements)
+    onProgress?.(78, 'Measuring areas and roads')
+    await yieldToDisplay()
+    const result = processElements(location, data.elements)
+    onProgress?.(94, 'Updating the horizon model')
+    return result
   } catch (error) {
     if (signal?.aborted) throw error
     throw new Error('OpenStreetMap survey timed out')
@@ -150,6 +160,8 @@ function processElements(location: Location, elements: OsmElement[]): MapAnalysi
 
   return {
     status: 'live',
+    progress: 100,
+    stage: 'Survey complete',
     sources,
     builtAreaKm2,
     roadLengthKm,
@@ -183,6 +195,8 @@ function makeSource(location: Location, input: {
 export function fallbackAnalysis(location: Location, message: string): MapAnalysis {
   return {
     status: 'fallback',
+    progress: 100,
+    stage: 'Baseline ready',
     sources: [{
       id: 'baseline',
       name: 'Local settlement baseline',
@@ -197,6 +211,10 @@ export function fallbackAnalysis(location: Location, message: string): MapAnalys
     roadLengthKm: 0,
     message,
   }
+}
+
+function yieldToDisplay() {
+  return new Promise<void>((resolve) => window.setTimeout(resolve, 0))
 }
 
 function titleCase(value: string) {

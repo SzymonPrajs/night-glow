@@ -38,6 +38,8 @@ const INITIAL_ATMOSPHERE: Atmosphere = {
 
 const EMPTY_ANALYSIS: MapAnalysis = {
   status: 'idle',
+  progress: 0,
+  stage: 'Waiting for a location',
   sources: [],
   builtAreaKm2: 0,
   roadLengthKm: 0,
@@ -57,10 +59,21 @@ export default function App() {
 
   useEffect(() => {
     const controller = new AbortController()
+    setAnalysis((current) => ({
+      ...current,
+      status: 'loading',
+      progress: 5,
+      stage: 'Preparing map survey',
+      message: undefined,
+    }))
     const timer = window.setTimeout(async () => {
-      setAnalysis((current) => ({ ...current, status: 'loading', message: undefined }))
       try {
-        const result = await analyzeOpenMap(location, controller.signal)
+        const result = await analyzeOpenMap(location, controller.signal, (progress, stage) => {
+          if (!controller.signal.aborted) {
+            setAnalysis((current) => current.status === 'loading' ? { ...current, progress, stage } : current)
+          }
+        })
+        if (controller.signal.aborted) return
         setAnalysis(result)
       } catch (error) {
         if (controller.signal.aborted) return
@@ -73,6 +86,16 @@ export default function App() {
       controller.abort()
     }
   }, [location])
+
+  useEffect(() => {
+    if (analysis.status !== 'loading') return
+    const timer = window.setInterval(() => {
+      setAnalysis((current) => current.status === 'loading' && current.progress < 58
+        ? { ...current, progress: Math.min(58, current.progress + 1) }
+        : current)
+    }, 350)
+    return () => window.clearInterval(timer)
+  }, [analysis.status])
 
   useEffect(() => {
     localStorage.setItem('night-glow:map-pinned', String(mapPinned))
@@ -175,6 +198,7 @@ export default function App() {
               <span><Layers3 size={14} /> Open map survey</span>
               <DataStatus status={analysis.status} />
             </div>
+            <SurveyProgress analysis={analysis} />
             <div className="analysis-grid">
               <div><strong>{formatArea(analysis.builtAreaKm2)}</strong><span>built-up area</span></div>
               <div><strong>{analysis.roadLengthKm.toFixed(0)} km</strong><span>major roads</span></div>
@@ -319,6 +343,29 @@ function DataStatus({ status }: { status: MapAnalysis['status'] }) {
   if (status === 'live') return <span className="data-status live"><i /> live OSM</span>
   if (status === 'fallback') return <span className="data-status fallback"><i /> baseline</span>
   return <span className="data-status"><i /> waiting</span>
+}
+
+function SurveyProgress({ analysis }: { analysis: MapAnalysis }) {
+  const progress = Math.round(clamp(analysis.progress, 0, 100))
+  return (
+    <div className={`analysis-progress ${analysis.status}`}>
+      <div className="analysis-progress-label">
+        <span>{analysis.stage}</span>
+        <strong>{progress}%</strong>
+      </div>
+      <div
+        className="analysis-progress-track"
+        role="progressbar"
+        aria-label="Open map survey progress"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={progress}
+        aria-valuetext={analysis.stage}
+      >
+        <span style={{ width: `${progress}%` }} />
+      </div>
+    </div>
+  )
 }
 
 function toLocalInput(date: Date) {
