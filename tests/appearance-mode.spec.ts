@@ -3,15 +3,12 @@ import { expect, test } from '@playwright/test'
 const APPEARANCE_STORAGE_KEY = 'night-glow:appearance-mode'
 
 test('offers accessible appearance modes without recomputing the physical analysis', async ({ page }) => {
-  await page.route('https://overpass-api.de/**', (route) => route.abort())
-  await page.route('https://overpass.kumi.systems/**', (route) => route.abort())
   await page.goto('/')
 
   const shell = page.locator('.app-shell')
   const progress = page.locator('.analysis-progress-track')
   const summary = page.getByLabel('Sky visibility summary')
   await expect(shell).toHaveAttribute('data-appearance', 'realistic')
-  await expect(page.getByLabel('Analysis component progress')).toContainText('Local map detail100%')
   await expect(progress).toHaveAttribute('aria-valuetext', 'Physical sky field ready')
 
   const summaryBefore = await summary.innerText()

@@ -1,20 +1,17 @@
 import { useEffect, useRef } from 'react'
 import L from 'leaflet'
-import type { LightSource, Location, MapAnalysis } from '../types'
+import type { Location } from '../types'
 
 type LocationMapProps = {
   location: Location
-  sources: LightSource[]
-  status: MapAnalysis['status']
   heading: number
   onChange: (location: Location) => void
 }
 
-export default function LocationMap({ location, sources, status, heading, onChange }: LocationMapProps) {
+export default function LocationMap({ location, heading, onChange }: LocationMapProps) {
   const elementRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const markerRef = useRef<L.Marker | null>(null)
-  const sourceLayerRef = useRef<L.LayerGroup | null>(null)
   const initialLocationRef = useRef(location)
   const callbackRef = useRef(onChange)
   callbackRef.current = onChange
@@ -41,7 +38,6 @@ export default function LocationMap({ location, sources, status, heading, onChan
         iconAnchor: [21, 21],
       }),
     }).addTo(map)
-    const sourceLayer = L.layerGroup().addTo(map)
     map.on('click', (event) => {
       callbackRef.current({
         lat: Number(event.latlng.lat.toFixed(5)),
@@ -51,13 +47,11 @@ export default function LocationMap({ location, sources, status, heading, onChan
     })
     mapRef.current = map
     markerRef.current = marker
-    sourceLayerRef.current = sourceLayer
     window.setTimeout(() => map.invalidateSize(), 50)
     return () => {
       map.remove()
       mapRef.current = null
       markerRef.current = null
-      sourceLayerRef.current = null
     }
   }, [])
 
@@ -74,31 +68,10 @@ export default function LocationMap({ location, sources, status, heading, onChan
     if (arrow) arrow.style.transform = `rotate(${heading}deg)`
   }, [heading])
 
-  useEffect(() => {
-    const layer = sourceLayerRef.current
-    if (!layer) return
-    layer.clearLayers()
-    if (status !== 'live') return
-    for (const source of sources.slice(0, 80)) {
-      const color = source.category === 'road' ? '#7fc2ff' : source.category === 'place' ? '#ffc775' : '#ff9665'
-      L.circleMarker([source.lat, source.lon], {
-        radius: Math.min(10, 2.2 + Math.sqrt(source.flux) * 0.55),
-        color,
-        fillColor: color,
-        fillOpacity: 0.25,
-        opacity: 0.6,
-        weight: 1,
-      })
-        .bindTooltip(`${source.name} · ${source.distanceKm.toFixed(1)} km`)
-        .addTo(layer)
-    }
-  }, [sources, status])
-
   return (
     <div className="map-shell">
       <div ref={elementRef} className="location-map" aria-label="OpenStreetMap location picker" />
       <div className="map-hint">Click anywhere to move the observer</div>
-      {status === 'loading' && <div className="map-loading"><span />Surveying nearby lights…</div>}
     </div>
   )
 }

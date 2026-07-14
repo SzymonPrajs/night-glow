@@ -201,9 +201,6 @@ button { color: inherit; }
 .observer-direction::after { content: ''; position: absolute; left: -4px; top: 1px; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 8px solid #ffd38a; filter: drop-shadow(0 0 4px rgba(255, 184, 92, .65)); }
 
 .map-hint { position: absolute; z-index: 500; left: 8px; top: 8px; padding: 5px 8px; border: 1px solid rgba(177, 207, 241, .12); border-radius: 6px; background: rgba(4, 10, 18, .78); color: #9babc1; font-size: 9px; pointer-events: none; }
-.map-loading { position: absolute; z-index: 600; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; background: rgba(4, 9, 17, .58); backdrop-filter: blur(2px); font-size: 10px; color: #c3d7ee; }
-.map-loading span { width: 13px; height: 13px; border: 1px solid rgba(188, 218, 250, .25); border-top-color: #a7d3ff; border-radius: 50%; animation: spin .8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
 
 .coordinates { height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 3px; color: #8d9cb2; font-family: 'DM Mono', monospace; font-size: 9px; border-bottom: 1px solid rgba(176, 204, 236, .1); }
 .coordinates svg { color: #94c8ff; }
@@ -248,7 +245,6 @@ button { color: inherit; }
 .analysis-grid strong { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; color: #e5f1ff; white-space: nowrap; }
 .analysis-grid span { font-size: 8px; line-height: 1.25; color: #76869b; }
 .analysis-message { margin: 10px 0 0; padding: 8px; border-radius: 7px; background: rgba(235, 160, 79, .08); color: #c5a57e; font-size: 8px; line-height: 1.4; }
-.map-detail-summary { display: flex; flex-wrap: wrap; gap: 5px 9px; margin-top: 9px; color: #64758a; font-size: 7px; }
 .radiance-breakdown { margin-top: 11px; padding-top: 10px; border-top: 1px solid rgba(176, 204, 236, .09); }
 .breakdown-heading { display: flex; justify-content: space-between; margin-bottom: 7px; color: #8497ad; font-size: 8px; }
 .breakdown-heading strong { color: #9ab4ce; font-family: 'DM Mono', monospace; font-size: 7px; font-weight: 400; }

@@ -44,16 +44,6 @@ export type LightSource = {
   provenance?: string
 }
 
-export type MapAnalysis = {
-  status: 'idle' | 'loading' | 'live' | 'fallback' | 'error'
-  progress: number
-  stage: string
-  sources: LightSource[]
-  builtAreaKm2: number
-  roadLengthKm: number
-  message?: string
-}
-
 export type SkyMetrics = {
   zenithMag: number
   limitingMagnitude: number

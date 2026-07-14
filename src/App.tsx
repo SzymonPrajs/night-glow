@@ -21,10 +21,9 @@ import SkyCanvas from './components/SkyCanvas'
 import { usePhysicalGlow, type PhysicalGlowAnalysisState } from './hooks/usePhysicalGlow'
 import { getSolarSystem } from './lib/astronomy'
 import { appearanceMetrics } from './lib/appearanceMetrics'
-import { analyzeOpenMap, fallbackAnalysis } from './lib/osm'
 import { calculatePhysicalSkyMetrics } from './lib/physicalGlowField'
 import { clamp } from './lib/skyModel'
-import type { AppearanceMode, Atmosphere, Location, MapAnalysis } from './types'
+import type { AppearanceMode, Atmosphere, Location } from './types'
 
 const INITIAL_LOCATION: Location = {
   lat: 52.2297,
@@ -54,20 +53,10 @@ function storedAppearanceMode(): AppearanceMode {
   return stored === 'atlas' || stored === 'realistic' ? stored : 'realistic'
 }
 
-const EMPTY_ANALYSIS: MapAnalysis = {
-  status: 'idle',
-  progress: 0,
-  stage: 'Waiting for a location',
-  sources: [],
-  builtAreaKm2: 0,
-  roadLengthKm: 0,
-}
-
 export default function App() {
   const [location, setLocation] = useState(INITIAL_LOCATION)
   const [atmosphere, setAtmosphere] = useState(INITIAL_ATMOSPHERE)
   const [appearanceMode, setAppearanceMode] = useState<AppearanceMode>(storedAppearanceMode)
-  const [analysis, setAnalysis] = useState<MapAnalysis>(EMPTY_ANALYSIS)
   const [date, setDate] = useState(() => new Date())
   const [mapOpen, setMapOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -75,40 +64,7 @@ export default function App() {
   const [settingsPinned, setSettingsPinned] = useState(() => localStorage.getItem('night-glow:settings-pinned') === 'true')
   const [resetViewToken, setResetViewToken] = useState(0)
   const [view, setView] = useState({ azimuth: 180, altitude: 17, fov: 62 })
-  const physicalGlow = usePhysicalGlow(location, analysis.sources, atmosphere)
-
-  useEffect(() => {
-    const controller = new AbortController()
-    setAnalysis((current) => ({
-      ...current,
-      status: 'loading',
-      progress: 5,
-      stage: 'Preparing map survey',
-      sources: [],
-      builtAreaKm2: 0,
-      roadLengthKm: 0,
-      message: undefined,
-    }))
-    const timer = window.setTimeout(async () => {
-      try {
-        const result = await analyzeOpenMap(location, controller.signal, (progress, stage) => {
-          if (!controller.signal.aborted) {
-            setAnalysis((current) => current.status === 'loading' ? { ...current, progress, stage } : current)
-          }
-        })
-        if (controller.signal.aborted) return
-        setAnalysis(result)
-      } catch (error) {
-        if (controller.signal.aborted) return
-        const message = error instanceof Error ? error.message : 'OpenStreetMap data is temporarily unavailable.'
-        setAnalysis(fallbackAnalysis(location, `${message}. Showing a conservative local baseline.`))
-      }
-    }, 550)
-    return () => {
-      window.clearTimeout(timer)
-      controller.abort()
-    }
-  }, [location])
+  const physicalGlow = usePhysicalGlow(location, atmosphere)
 
   useEffect(() => {
     localStorage.setItem('night-glow:map-pinned', String(mapPinned))
@@ -198,7 +154,7 @@ export default function App() {
         label="Location map"
         tabIcon={<Map size={18} />}
         panelClass="location-panel"
-        panelLabel="Observer location and light sources"
+        panelLabel="Observer location and physical sky analysis"
         pinned={mapPinned}
         open={mapOpen}
         onOpenChange={setMapOpen}
@@ -210,7 +166,7 @@ export default function App() {
             onPinnedChange={setMapPin}
             onClose={() => { setMapPinned(false); setMapOpen(false) }}
           />
-          <LocationMap location={location} sources={analysis.sources} status={analysis.status} heading={view.azimuth} onChange={setLocation} />
+          <LocationMap location={location} heading={view.azimuth} onChange={setLocation} />
           <div className="coordinates">
             <LocateFixed size={14} />
             <span>{location.lat.toFixed(4)}° {location.lat >= 0 ? 'N' : 'S'}</span>
@@ -219,9 +175,9 @@ export default function App() {
           <div className="analysis-block">
             <div className="analysis-title">
               <span><Layers3 size={14} /> Physical sky analysis</span>
-              <DataStatus analysis={analysis} physicalGlow={physicalGlow} />
+              <DataStatus physicalGlow={physicalGlow} />
             </div>
-            <SurveyProgress analysis={analysis} physicalGlow={physicalGlow} />
+            <SolverProgress physicalGlow={physicalGlow} />
             <SolverTimings physicalGlow={physicalGlow} />
             <div className="analysis-grid">
               <div><strong>{physicalGlow.emissionDiagnostics?.rings.length ?? 81}</strong><span>distance rings</span></div>
@@ -230,12 +186,6 @@ export default function App() {
               <div><strong>{physicalGlow.result?.wavelengthsNm.length ?? 8}</strong><span>spectral bands</span></div>
             </div>
             <RadianceBreakdown physicalGlow={physicalGlow} />
-            <div className="map-detail-summary">
-              <span>{formatArea(analysis.builtAreaKm2)} mapped area</span>
-              <span>{analysis.roadLengthKm.toFixed(0)} km roads</span>
-              <span>{analysis.sources.length.toLocaleString()} features</span>
-            </div>
-            {analysis.message && <p className="analysis-message">{analysis.message}</p>}
             {physicalGlow.error && <p className="analysis-message">{physicalGlow.error}</p>}
           </div>
       </SideDrawer>
@@ -375,24 +325,17 @@ function SummaryMetric({ label, value }: { label: string; value: string }) {
   return <div className="summary-metric"><span>{label}</span><strong>{value}</strong></div>
 }
 
-function DataStatus({ analysis, physicalGlow }: { analysis: MapAnalysis; physicalGlow: PhysicalGlowAnalysisState }) {
+function DataStatus({ physicalGlow }: { physicalGlow: PhysicalGlowAnalysisState }) {
   if (physicalGlow.status === 'loading') return <span className="data-status loading"><i /> solving</span>
-  if (physicalGlow.status === 'live' && analysis.status === 'fallback') {
-    return <span className="data-status fallback"><i /> regional</span>
-  }
   if (physicalGlow.status === 'live') return <span className="data-status live"><i /> physical</span>
   if (physicalGlow.status === 'error') return <span className="data-status fallback"><i /> previous field</span>
   return <span className="data-status"><i /> waiting</span>
 }
 
-function SurveyProgress({ analysis, physicalGlow }: { analysis: MapAnalysis; physicalGlow: PhysicalGlowAnalysisState }) {
-  const mapProgress = analysis.status === 'live' || analysis.status === 'fallback'
-    ? 100
-    : clamp(analysis.progress, 0, 100)
-  const progress = Math.round(clamp(physicalGlow.progress * 0.9 + mapProgress * 0.1, 0, 100))
+function SolverProgress({ physicalGlow }: { physicalGlow: PhysicalGlowAnalysisState }) {
+  const progress = Math.round(clamp(physicalGlow.progress, 0, 100))
   const rows = [
-    { label: 'Emission rings', value: physicalGlow.components.emission * 100 },
-    { label: 'Local map detail', value: mapProgress },
+    { label: 'Source grid', value: physicalGlow.components.emission * 100 },
     { label: 'Atmosphere kernel', value: physicalGlow.components.kernel * 100 },
     { label: 'Sky convolution', value: physicalGlow.components.propagation * 100 },
     { label: 'Numerical checks', value: physicalGlow.components.diagnostics * 100 },
@@ -526,8 +469,4 @@ function toLocalInput(date: Date) {
 function compassDirection(degrees: number) {
   const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
   return directions[Math.round(degrees / 45) % 8]
-}
-
-function formatArea(area: number) {
-  return area < 10 ? `${area.toFixed(1)} km²` : `${area.toFixed(0)} km²`
 }

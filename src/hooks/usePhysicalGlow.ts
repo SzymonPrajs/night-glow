@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   buildEmissionGrid,
-  fuseOsmWithRegionalEmission,
+  createRegionalSettlementSources,
   type EmissionDiagnostics,
-  type OsmRegionalFusionDiagnostics,
 } from '../lib/emission'
 import type {
   PhysicalGlowAnalyzeRequest,
@@ -14,7 +13,9 @@ import type {
   PhysicalGlowWorkerMessage,
 } from '../lib/physicalGlowProtocol'
 import { DEFAULT_SKY_ELEVATIONS_DEG } from '../lib/physics'
-import type { Atmosphere, LightSource, Location } from '../types'
+import type { Atmosphere, Location } from '../types'
+
+const REGIONAL_SOURCES = createRegionalSettlementSources()
 
 const EMPTY_COMPONENTS: PhysicalGlowProgressBreakdown = {
   emission: 0,
@@ -40,8 +41,6 @@ export type PhysicalGlowAnalysisState = {
   error?: string
   emissionBuildMs?: number
   emissionDiagnostics?: EmissionDiagnostics
-  fusionDiagnostics?: OsmRegionalFusionDiagnostics
-  dataMode: 'regional' | 'regional+osm'
 }
 
 const INITIAL_STATE: PhysicalGlowAnalysisState = {
@@ -50,12 +49,10 @@ const INITIAL_STATE: PhysicalGlowAnalysisState = {
   stage: 'Waiting for source data',
   components: EMPTY_COMPONENTS,
   weights: DEFAULT_WEIGHTS,
-  dataMode: 'regional',
 }
 
 export function usePhysicalGlow(
   location: Location,
-  mappedSources: readonly LightSource[],
   atmosphere: Atmosphere,
 ) {
   const [state, setState] = useState<PhysicalGlowAnalysisState>(INITIAL_STATE)
@@ -141,26 +138,22 @@ export function usePhysicalGlow(
         ...current,
         status: 'loading',
         progress: 2,
-        stage: 'Integrating extended source footprints',
-        detail: mappedSources.length
-          ? `Fusing ${mappedSources.length.toLocaleString()} mapped features with the regional field`
-          : 'Loading the bundled regional field while local map detail arrives',
+        stage: 'Integrating regional source footprints',
+        detail: `Integrating ${REGIONAL_SOURCES.length.toLocaleString()} bundled settlement footprints`,
         components: { emission: 0.08, kernel: 0, propagation: 0, diagnostics: 0 },
         error: undefined,
-        dataMode: mappedSources.length ? 'regional+osm' : 'regional',
       }))
 
       try {
         const started = performance.now()
-        const fusion = fuseOsmWithRegionalEmission(mappedSources)
         const emission = buildEmissionGrid({
           observer: location,
-          sources: fusion.sources,
+          sources: REGIONAL_SOURCES,
           sampleSpacingKm: 0.5,
           maxSamplesPerSource: 4096,
         })
         const emissionBuildMs = performance.now() - started
-        const emissionCacheKey = makeEmissionCacheKey(location, mappedSources)
+        const emissionCacheKey = makeEmissionCacheKey(location)
         // A posted inline request may be cancelled during its debounce before
         // the worker has installed the field. Only a completed result confirms
         // that a cache-only follow-up is safe.
@@ -191,7 +184,6 @@ export function usePhysicalGlow(
           ...current,
           emissionBuildMs,
           emissionDiagnostics: emission.diagnostics,
-          fusionDiagnostics: fusion.diagnostics,
           components: { ...current.components, emission: 0.92 },
           detail: `${emission.rings.length} rings × ${emission.sectorCount} bearings · ${emissionBuildMs.toFixed(0)} ms source integration`,
         }))
@@ -209,7 +201,7 @@ export function usePhysicalGlow(
       window.clearTimeout(timer)
       if (activeRequestRef.current === requestId) worker.postMessage({ type: 'cancel', requestId })
     }
-  }, [location, mappedSources, atmosphere])
+  }, [location, atmosphere])
 
   return state
 }
@@ -258,10 +250,9 @@ function transferableBuffers(grid: PhysicalGlowEmissionGrid) {
   return buffers
 }
 
-function makeEmissionCacheKey(location: Location, sources: readonly LightSource[]) {
+function makeEmissionCacheKey(location: Location) {
   let hash = 0x811c9dc5
-  const value = `${location.lat.toFixed(5)},${location.lon.toFixed(5)}|${sources.map((source) =>
-    `${source.id}:${source.flux.toFixed(4)}:${source.geometry?.points.length ?? 0}`).join('|')}`
+  const value = `regional-v1|${location.lat.toFixed(5)},${location.lon.toFixed(5)}`
   for (let index = 0; index < value.length; index += 1) {
     hash ^= value.charCodeAt(index)
     hash = Math.imul(hash, 0x01000193)
@@ -272,10 +263,5 @@ function makeEmissionCacheKey(location: Location, sources: readonly LightSource[
 function componentLabel(id: string) {
   return ({
     'settlement-proxy': 'Regional settlements',
-    'settlement-residual': 'Regional residual',
-    'settlement-refined': 'Mapped built-up detail',
-    'osm-built-proxy': 'Local built-up areas',
-    'osm-road-proxy': 'Uncovered roads',
-    'osm-place-proxy': 'Mapped settlements',
   } as Record<string, string>)[id] ?? id
 }
