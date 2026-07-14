@@ -77,8 +77,11 @@ photometry.
 
 `buildAtmosphericKernel` tabulates unit-source response over distance, relative
 azimuth, elevation, and the eight shared spectral bands. The default distance
-grid reaches 1000 km and the relative-azimuth response is sampled every five
-degrees. Lookups use trilinear interpolation and azimuthal symmetry.
+grid reaches 1000 km. Relative azimuth uses 0.5-degree steps in the forward
+scattering core and progressively coarser steps to 180 degrees. The 22 solved
+elevations start at 0, 0.125, and 0.25 degrees, then expand progressively to
+15-degree zenith intervals. Lookups use trilinear interpolation and azimuthal
+symmetry.
 
 `atmosphericKernelCacheKey` hashes all atmosphere, grid, band, and transfer
 settings. `serializeAtmosphericKernel` and `deserializeAtmosphericKernel` allow
@@ -104,10 +107,10 @@ resolved mode without a low-order cutoff. Because both source power and the
 sampled kernel are non-negative, it cannot create detached Gibbs lobes; only
 round-off-sized signed noise remains, and negative values are clamped.
 
-The default 720-bearing plan stores its real half-spectra as `Float32` values
-and occupies about 55.7 MiB. The worker retains one plan and evicts it before
-allocating a replacement, avoiding a two-plan memory spike when the atmosphere
-changes.
+The default 22-elevation, 720-bearing plan stores its real half-spectra as
+`Float32` values and occupies about 111.5 MiB. The worker retains one plan and
+evicts it before allocating a replacement, avoiding a two-plan memory spike
+when the atmosphere changes.
 
 ## Minimal use
 
@@ -117,6 +120,7 @@ import {
   convolveRingEmissionField,
   createRingConvolutionPlan,
   createRingEmissionField,
+  DEFAULT_SKY_ELEVATIONS_DEG,
 } from './lib/physics'
 
 const kernel = buildAtmosphericKernel({
@@ -134,9 +138,8 @@ const field = createRingEmissionField(
   emissionValues,
   0.25, // bearing of sector zero's centre
 )
-const elevations = [0, 2, 5, 10, 20, 30, 45, 60, 75, 90]
-const plan = createRingConvolutionPlan(kernel, ringMidpointsKm, 720, elevations)
-const sky = convolveRingEmissionField(kernel, field, elevations, plan)
+const plan = createRingConvolutionPlan(kernel, ringMidpointsKm, 720, DEFAULT_SKY_ELEVATIONS_DEG)
+const sky = convolveRingEmissionField(kernel, field, DEFAULT_SKY_ELEVATIONS_DEG, plan)
 ```
 
 `sky.radiance` is laid out as `[elevation][azimuth sector][band]`. Inputs are

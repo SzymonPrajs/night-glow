@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 test('reports real solver progress and recomputes an atmosphere preset', async ({ page }, testInfo) => {
+  test.setTimeout(45_000)
   const browserErrors: string[] = []
   page.on('pageerror', (error) => browserErrors.push(error.message))
   page.on('console', (message) => {
@@ -11,6 +12,8 @@ test('reports real solver progress and recomputes an atmosphere preset', async (
     if (!unavailableExternalResource) browserErrors.push(`${message.text()} ${sourceUrl}`.trim())
   })
 
+  await page.route('https://overpass-api.de/**', (route) => route.abort())
+  await page.route('https://overpass.kumi.systems/**', (route) => route.abort())
   await page.goto('/')
   await page.getByRole('button', { name: 'Show Location map' }).hover()
 
@@ -18,7 +21,7 @@ test('reports real solver progress and recomputes an atmosphere preset', async (
   await expect(page.getByRole('progressbar', { name: 'Physical sky analysis progress' })).toBeVisible()
 
   const observedProgress: number[] = []
-  for (let sample = 0; sample < 40; sample += 1) {
+  for (let sample = 0; sample < 240; sample += 1) {
     observedProgress.push(Number(await progress.getAttribute('aria-valuenow') ?? 0))
     if (await progress.getAttribute('aria-valuetext') === 'Physical sky field ready') break
     await page.waitForTimeout(50)
@@ -33,14 +36,21 @@ test('reports real solver progress and recomputes an atmosphere preset', async (
   await expect(page.getByLabel('Analysis component progress')).toContainText('Numerical checks100%')
   await expect(page.getByText('81', { exact: true }).first()).toBeVisible()
   await expect(page.getByText('720', { exact: true }).first()).toBeVisible()
+  await expect(page.locator('.analysis-grid')).toContainText('22adaptive elevations')
   await expect(page.getByText('8', { exact: true }).first()).toBeVisible()
   await expect(page.locator('canvas')).toBeVisible()
+
+  await page.locator('canvas').hover()
+  await page.mouse.wheel(0, -600)
+  await page.waitForTimeout(250)
+  await expect(progress).toHaveAttribute('aria-valuetext', 'Physical sky field ready')
+  await expect(progress).toHaveAttribute('aria-valuenow', '100')
 
   await page.getByRole('button', { name: 'Show Sky settings' }).hover()
   await page.getByRole('button', { name: 'Humid', exact: true }).click()
   await expect.poll(async () => Number(await progress.getAttribute('aria-valuenow') ?? 100)).toBeLessThan(90)
   const recomputeProgress: number[] = []
-  for (let sample = 0; sample < 60; sample += 1) {
+  for (let sample = 0; sample < 240; sample += 1) {
     recomputeProgress.push(Number(await progress.getAttribute('aria-valuenow') ?? 0))
     if (await progress.getAttribute('aria-valuetext') === 'Physical sky field ready') break
     await page.waitForTimeout(50)

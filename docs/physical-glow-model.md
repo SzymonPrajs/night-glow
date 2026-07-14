@@ -7,9 +7,9 @@ regional settlement totals + OpenStreetMap geometry
                          ↓ conserved spatial fusion
 81 distance rings × 720 bearings × 8 wavelength bands
                          ↓ curved-Earth spectral transfer kernel
-36-mode circular harmonic convolution
+positive zero-padded FFT circular convolution
                          ↓
-11 elevations × 720 bearings × spectrum, RGB, and limiting magnitude
+22 adaptive elevations × 720 bearings × spectrum, RGB, and limiting magnitude
                          ↓
 3-D glow mesh + directional stars, Milky Way, planets, and deep sky
 ```
@@ -207,7 +207,21 @@ Atmospheric state changes much less often than view direction. The worker theref
 K_b(r,e,\Delta\theta)
 \]
 
-over distance, elevation, relative azimuth, and wavelength. Each spectral band is evaluated at its centre wavelength; nominal band widths are not numerically integrated. Relative azimuth is symmetric and sampled every 5°, while distance nodes reach the outer 1000 km ring. Trilinear interpolation supplies intermediate values.
+over distance, elevation, relative azimuth, and wavelength. Each spectral band is evaluated at its centre wavelength; nominal band widths are not numerically integrated. Relative azimuth is symmetric and adapts from 0.5° steps through the forward-scattering core (0–10°), to 1° through 20°, 2.5° through 30°, and 5° beyond. Distance nodes reach the outer 1000 km ring. Trilinear interpolation supplies intermediate values.
+
+The elevation grid is also nonuniform, because the long near-ground optical path makes radiance bend much more sharply just above the horizon than near the zenith:
+
+| Elevation range | Maximum solved step |
+|---:|---:|
+| 0–0.25° | 0.125° |
+| 0.25–3° | 0.5° |
+| 3–8° | 1° |
+| 8–20° | 5° |
+| 20–90° | 15° |
+
+The exact 22 nodes are \(0,0.125,0.25,0.5,1,1.5,2,2.5,3,4,5,6,7,8,10,15,20,30,45,60,75,90^\circ\). They are observer-centred and independent of camera pan, zoom, and field of view. A view-dependent kernel would invalidate the atmosphere and FFT caches during every drag, causing multi-second recomputation and temporal popping.
+
+Against direct transfer evaluations every 0.125° through 10°, over 15 representative distance/relative-azimuth cases and all eight bands, linear interpolation on this grid has 0.62% normalized RMS error, 0.88% p95 error, and 9.71% worst-case error. The former 11-row grid measured 7.56%, 17.61%, and 52.38% respectively.
 
 The spectral sky is the circular convolution
 
@@ -216,15 +230,25 @@ L_{ekb}=\sum_j\sum_m G_{jmb}\,
 K_b(r_j,e,\theta_k-\theta_m).
 \]
 
-A direct evaluation would scale as \(O(ERBN^2)\). The kernel is instead represented by at most 36 real Fourier harmonics at the current five-degree resolution. Source rings are transformed once, multiplied by precomputed kernel coefficients, and reconstructed for all 720 bearings. Complexity becomes
+A direct evaluation would scale as \(O(ERBN^2)\). Instead, each non-negative angular kernel is sampled onto the 720-bearing output grid, zero-padded to a 2048-point linear-convolution FFT, and cached as a real half-spectrum. Every source ring is transformed once; its spectrum is multiplied by each ring kernel and the wrapped linear-convolution tail is folded back onto the circle. If \(F\) is the FFT size, cached sky-solve complexity is
 
 \[
-O(RBMN+EBM(R+N)),
+O\!\left(RBF\log F+EB\left(RF+F\log F\right)\right),
 \]
 
-where \(R\) is rings, \(B\) bands, \(M\) harmonics, \(N\) bearings, and \(E\) elevations. The 720 values are half-degree output samples, but the five-degree kernel resolves at most 36 harmonics; negative Fourier ringing is clipped to zero. It is therefore a smooth approximation, not genuine half-degree atmospheric physics or exact radiative-energy conservation.
+where \(R\) is rings, \(B\) bands, \(E\) elevations, and \(N\) bearings. There is no low-harmonic truncation. Both source power and sampled kernels are non-negative, so this construction cannot create detached Gibbs side lobes; only round-off-sized negative values are clamped. Angular-mean conservation is checked numerically.
 
-Kernel keys hash atmosphere, transfer options, bands, and sampling grid. Plan keys additionally hash ring layout, elevation list, and sector count. Exact repeats reuse both. Serialization/deserialization is implemented for optional persistent precomputation, but the current runtime cache is already fast enough that shipping several megabytes of preset kernels would slow initial download more than it helps typical use.
+Kernel keys hash atmosphere, transfer options, bands, and sampling grid. Plan keys additionally hash ring layout, elevation list, and sector count. Exact repeats reuse both. The 22-row kernel is about 0.79 MiB and its 720-bearing FFT plan is 111.5 MiB; the worker retains only one plan and evicts it before allocating a replacement. Serialization/deserialization is implemented for optional persistent kernel precomputation, while the large derived FFT plan remains a runtime cache.
+
+Aggregate distance, source-layer, and field diagnostics do not average the 22 rows equally. With \(u_i=\sin(e_i)\), normalized trapezoid weights are
+
+\[
+w_0=\frac{u_1-u_0}{2},\qquad
+w_i=\frac{u_{i+1}-u_{i-1}}{2},\qquad
+w_{E-1}=\frac{u_{E-1}-u_{E-2}}{2}.
+\]
+
+They sum to one because the grid spans 0–90°. This is the correct hemisphere measure \(d\Omega=\cos(e)\,de\,d\theta=du\,d\theta\), and prevents dense horizon sampling from changing a mean merely by adding rows.
 
 ## 6. From spectral sky to visible objects
 
@@ -241,7 +265,7 @@ m_{\rm dark}-1.18\log_{10}\left(1+\frac{Y_{\rm art}}{Y_{\rm natural}}\right),
 
 The renderer bilinearly interpolates the periodic bearing grid and irregular elevation grid. This local limit controls each catalogue star, bright-star label, cluster, nebula, galaxy, planet, and Milky Way sample. The 8,404-star catalogue reaches visual magnitude 6.5; magnitude, B−V colour, spectral type, atmospheric extinction, PSF width, halo, and chromatic dispersion determine each stellar point. Moonlight and astronomical twilight apply an additional global penalty, while the directional artificial-light field remains spatially resolved.
 
-The glow itself is a 720-bearing vertex-colour mesh on the sky dome. The 11 solved elevations are linearly densified to 126 render rows to suppress triangle seams without inventing new physical samples. A monotonic exposure mapping converts relative radiance to display intensity without replacing the underlying field used for visibility decisions.
+The glow itself is a 720-bearing vertex-colour mesh on the sky dome. The 22 physically solved elevations are linearly densified to 128 render rows, retaining every solved row while limiting render-only steps to 0.25° below 10°, 0.5° through 30°, 1° through 60°, and 2° toward the zenith. This suppresses triangle seams without pretending that interpolation is a new physical solve. A monotonic exposure mapping converts relative radiance to display intensity without replacing the underlying field used for visibility decisions.
 
 ### 6.1 Atlas and Realistic presentation
 
@@ -281,16 +305,16 @@ This empirical presentation threshold does not feed back into atmospheric transp
 
 All expensive atmospheric work runs in a module Web Worker. Typed-array buffers are transferred rather than cloned. Kernel construction yields every 128 unit-source cells so a superseding slider message can stop stale work after roughly one small batch. Rapid changes are also debounced; only a completed result confirms that an emission grid is safe to reference by cache key.
 
-Caches are bounded least-recently-used maps: three emission grids, four atmosphere kernels, and four Fourier plans. Evicting a kernel also removes its dependent plans, preventing a long slider session from retaining unbounded multi-megabyte arrays.
+Caches are bounded least-recently-used maps: three emission grids, four atmosphere kernels, and one Fourier plan. Evicting a kernel also removes its dependent plan, and the previous plan is evicted before replacement allocation to avoid a two-plan memory spike.
 
 The visible overall progress reserves 10% for the OSM survey and 90% for the physical solver. Inside the solver the normalized weights are:
 
 | Component | Physical-solver weight |
 |---|---:|
-| Emission validation/cache | 14% |
-| Atmospheric kernel and harmonic plan | 48% |
-| Sky convolution and spectral conversion | 30% |
-| Conservation/boundary diagnostics | 8% |
+| Emission validation/cache | 8% |
+| Atmospheric kernel and FFT plan | 80% |
+| Sky convolution and spectral conversion | 8% |
+| Conservation/boundary diagnostics | 4% |
 
 Kernel progress is the actual completed count of unit-source paths, throttled to about 30 updates per second rather than a timer animation. The hook enforces monotonic progress within one request. The panel also reports every component separately, source-layer and distance contributions, the modeled share from 300–1000 km, and measured grid/kernel/sky/check timings. The internal outermost-100-km value is explicitly a boundary-sensitivity indicator, not a convergence error or estimate of omitted light.
 
@@ -299,29 +323,32 @@ On the development machine, `npm run test:physics` currently measures approximat
 | Stage | Time |
 |---|---:|
 | Regional grid integration | 25–45 ms |
-| New atmospheric kernel | 620–720 ms |
-| New Fourier plan | 75–85 ms |
-| Full 81 × 720 × 11 × 8 convolution | 44–50 ms |
+| New 22-row atmospheric kernel | 2.2–2.9 s |
+| New 22-row Fourier plan | 0.5–0.7 s |
+| Cached 81 × 720 × 22 × 8 convolution | 80–110 ms |
 
-The kernel is the only material initial cost and is both off-main-thread and cached. Panning, zooming, and time changes only move/rebuild the sky scene; they do not recompute atmospheric transport. A Rust/Wasm implementation would add a boundary and duplicate numerical code for a hot path already below one frame interval after caching, so the implementation keeps the solver in auditable TypeScript for now. The star catalogue is emitted as its own production chunk, separate from the 82 kB main application chunk.
+The kernel and FFT plan are the only material initial costs; both run off the main thread and are cached. Panning, zooming, and time changes only move/rebuild the sky scene and do not recompute atmospheric transport. Cached location updates solve in roughly a tenth of a second without blocking interaction. A Rust/Wasm implementation would add a boundary and duplicate numerical code for work already isolated from the render loop, so the implementation keeps the solver in auditable TypeScript for now. The star catalogue is emitted as its own production chunk.
 
 ## 8. Verification
 
-`npm run test:physics` checks conservation, finite/non-negative output, linearity, rotational invariance, long-range scattering, direction, and angular extent. At observer `51.5329° N, 18.9390° E`, the current deterministic result is:
+`npm run test:physics` checks conservation, finite/non-negative output, linearity, rotational invariance, long-range scattering, direction, angular extent, adaptive-grid error, solid-angle quadrature, FFT-plan memory, and cached-solve latency. At observer `51.5329° N, 18.9390° E`, the current deterministic result is:
 
 - Łódź centre bearing: 54.598°.
-- Computed horizon-glow peak: 55.75°.
+- Computed horizon-glow peak: 55.25°.
 - Integrated footprint: 1,552 quadrature samples across 59 sectors (29.5°) and 11 rings.
 - Łódź bandwise conservation error: \(3.60\times10^{-14}\).
 - Full regional-grid conservation error: \(5.92\times10^{-13}\).
 - Linearity error: zero at Float32 output precision.
-- Rotation error after a 73-sector source rotation: zero at Float32 output precision.
+- Rotation error after a 73-sector source rotation: about \(1.2\times10^{-9}\).
 - Independent north/east/south/west fixtures peak within 0.25° of their cardinal directions.
-- In the complete regional field, the 40–70° Łódź lobe is about 980 times the opposite 220–250° lobe for this observer.
+- In the complete regional field, the 40–70° Łódź lobe is about 960 times the opposite 220–250° lobe for this observer.
 - A synthetic bright city at 600 km retains finite modeled radiance at 20° elevation.
 - The asynchronous kernel builder demonstrably stops after a superseding cancellation check.
+- Adaptive 0–10° interpolation is 0.62% RMS and 0.88% at p95 against dense transfer evaluations.
+- The solid-angle mean of a horizon-peaked analytic profile differs by 0.11% from a 0.125° reference grid.
+- The cached FFT plan is 111.5 MiB and the full sky convolution remains below the one-second regression ceiling.
 
-`npm run test:e2e` launches Chromium, observes intermediate real worker percentages, waits for every physical component to reach 100%, changes to the Humid atmosphere preset, verifies a second solve, and fails on page or console errors.
+`npm run test:e2e` launches Chromium, observes intermediate real worker percentages, verifies that the worker returned all 22 adaptive elevations, confirms zoom does not trigger a physical recomputation, waits for every component to reach 100%, changes to the Humid atmosphere preset, verifies a second solve, and fails on page or console errors.
 
 `npm run test:appearance` checks the Realistic sky-response anchors, magnitude law, integral-normalized PSF, stellar chroma, sprite size, atmosphere-dependent dispersion, and visual-limit calibration. The appearance E2E case verifies accessible keyboard selection, persistence, consistent presentation metrics, and that a mode switch leaves the completed physical field untouched.
 

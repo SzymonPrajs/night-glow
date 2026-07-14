@@ -296,13 +296,16 @@ const result = {
     horizonInterpolation,
     adaptiveSolidAngleProfileError: Math.abs(adaptiveProfileMean - denseProfileMean) / denseProfileMean,
     renderElevationRows: renderFixture.elevationDeg.length,
+    adaptiveRenderElevationRows: adaptiveRenderFixture.elevationDeg.length,
     renderHorizonStepDeg: maximumElevationStep(renderFixture.elevationDeg, 0, 10),
+  },
+  resources: {
+    fftPlanMiB: planBytes / 2 ** 20,
   },
   performanceMs: {
     emission: emissionMs,
     kernel: kernelMs,
     fftPlan: planMs,
-    fftPlanMiB: planBytes / 2 ** 20,
     fullSkyConvolution: solveMs,
   },
 }
