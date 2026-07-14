@@ -3,8 +3,8 @@
 This document describes the implemented model, not a proposed future model. The pipeline is deliberately linear in emitted light so that a city’s total proxy flux can be spread over its full width without gaining energy, then propagated through one reusable atmosphere:
 
 ```text
-regional settlement totals + OpenStreetMap geometry
-                         ↓ conserved spatial fusion
+bundled extended regional settlement footprints
+                         ↓ conserved geometry integration
 81 distance rings × 720 bearings × 8 wavelength bands
                          ↓ curved-Earth spectral transfer kernel
 positive zero-padded FFT circular convolution
@@ -56,26 +56,11 @@ up to floating-point rounding.
 
 ### Extended geometry integration
 
-- Ellipses use deterministic equal-area Hammersley samples. A settlement therefore occupies many angular and radial cells, even when only a proxy ellipse is available.
-- Polygons use a uniform local tangent-plane lattice and retain cell centres inside the boundary. Sub-resolution polygons retain vertices and edge midpoints rather than collapsing to one centroid.
-- Roads use length-weighted midpoint samples along every segment. Non-zero road width uses a \(1:4:1\) cross-road quadrature.
+- Settlement ellipses use deterministic equal-area Hammersley samples. A city therefore occupies many angular and radial cells rather than collapsing to one centroid.
 
 The default spacing is 0.5 km with a maximum of 4096 samples per source. The weight normalization makes the grid an integral of a uniformly emissive footprint, not a collection of independent point lights.
 
-### Evidence precedence
-
-Sources estimating the same physical coverage share a `coverageId`. Only the highest evidence priority in a group is retained:
-
-\[
-p_{\rm inventory}=400,\qquad
-p_{\rm measured}=300,\qquad
-p_{\rm built/population}=200,\qquad
-p_{\rm road}=100.
-\]
-
-Sources tied at the winning priority are additive. This allows several refined polygons plus a residual ellipse to represent one conserved settlement total, while a later calibrated inventory or measured-radiance layer can supersede every proxy shard using the same identifier.
-
-## 2. Regional settlement totals and OSM refinement
+## 2. Regional settlement totals
 
 For bundled settlement \(p\), the relative upward-flux total is
 
@@ -90,39 +75,6 @@ where \(A_p\) is proxy built area in km², \(P_p\) is proxy population, \(I_p\) 
 \]
 
 This total is initially uniform over the settlement ellipse. For Łódź, for example, the ellipse has 13 km and 9.5 km semi-axes rather than one coordinate at the city centre.
-
-If OSM built geometry lies inside footprint \(p\), only a capped fraction of the existing total moves into that geometry:
-
-\[
-f_p=\min\left(0.7,\frac{\sum_i A_i}{\pi a_p b_p}\right).
-\]
-
-Nearby roads are treated as evidence for where lighting is concentrated, not as an automatic second emission inventory. For detailed built feature \(i\),
-
-\[
-R_i=\sum_\ell L_\ell\exp(-d_{i\ell}/D),\qquad D=3\ \mathrm{km},
-\]
-
-\[
-\beta_i=\min\left(\beta_{\max},\gamma\frac{R_i}{\max(1,A_i)}\right),
-\qquad W_i=B_i(1+\beta_i),
-\]
-
-where \(L_\ell\) is road length, \(d_{i\ell}\) is sampled feature distance, and \(B_i\) is the built-feature proxy (with area as its zero-flux fallback). Allocation and residual are
-
-\[
-\Phi_{pib}=f_p\Phi_{pb}\frac{W_i}{\sum_m W_m},
-\qquad
-\Phi^{\rm residual}_{pb}=(1-f_p)\Phi_{pb}.
-\]
-
-Therefore
-
-\[
-\sum_i\Phi_{pib}+\Phi^{\rm residual}_{pb}=\Phi_{pb}.
-\]
-
-Covered place nodes are suppressed as duplicate estimates. Covered roads only change weights. Uncovered built features retain their combined linear proxy total; only truly orphaned roads become standalone road proxies. If no directional source exists, the fallback remains explicitly isotropic and directional cells stay zero.
 
 ## 3. Curved-Earth single scattering
 
@@ -307,7 +259,7 @@ All expensive atmospheric work runs in a module Web Worker. Typed-array buffers 
 
 Caches are bounded least-recently-used maps: three emission grids, four atmosphere kernels, and one Fourier plan. Evicting a kernel also removes its dependent plan, and the previous plan is evicted before replacement allocation to avoid a two-plan memory spike.
 
-The visible overall progress reserves 10% for the OSM survey and 90% for the physical solver. Inside the solver the normalized weights are:
+The visible overall progress is the physical solver's directly reported progress. Its normalized component weights are:
 
 | Component | Physical-solver weight |
 |---|---:|
@@ -348,22 +300,20 @@ The kernel and FFT plan are the only material initial costs; both run off the ma
 - The solid-angle mean of a horizon-peaked analytic profile differs by 0.11% from a 0.125° reference grid.
 - The cached FFT plan is 111.5 MiB and the full sky convolution remains below the one-second regression ceiling.
 
-`npm run test:e2e` launches Chromium, observes intermediate real worker percentages, verifies that the worker returned all 22 adaptive elevations, confirms zoom does not trigger a physical recomputation, waits for every component to reach 100%, changes to the Humid atmosphere preset, verifies a second solve, and fails on page or console errors.
+`npm run test:e2e` launches Chromium, observes intermediate real worker percentages, verifies that the worker returned all 22 adaptive elevations, confirms the four physical components reach 100%, confirms neither zoom nor idle time triggers a second solve, changes to the Humid atmosphere preset, verifies that requested recomputation, and fails on page or console errors.
 
 `npm run test:appearance` checks the Realistic sky-response anchors, magnitude law, integral-normalized PSF, stellar chroma, sprite size, atmosphere-dependent dispersion, and visual-limit calibration. The appearance E2E case verifies accessible keyboard selection, persistence, consistent presentation metrics, and that a mode switch leaves the completed physical field untouched.
 
 ## 9. Limitations
 
 - Conservation proves that supplied proxy totals are neither lost nor duplicated. It does not prove that those totals are calibrated watts or measured upward radiance.
-- Bundled settlement populations, built areas, lighting factors, spectra, and ellipses are rounded regional proxies. OSM changes their spatial distribution but normally not the absolute settlement total.
+- Bundled settlement populations, built areas, lighting factors, spectra, and ellipses are rounded regional proxies.
 - The mixed eight-band spectrum does not yet infer local lamp technology, curfew, operating schedule, snow response, or wavelength-dependent upward-emission functions.
-- OSM/ellipse association samples feature centres, vertices, and segment midpoints rather than computing exact polygon intersections. Overlapping built polygons are summed before the refinement cap instead of using their exact union area.
-- Geometry is uniformly emissive within an ellipse/polygon and per unit length along a road. Results are quantized by quadrature spacing, the 4096-sample cap, rings, and half-degree sectors.
-- Local detailed OSM land-use and roads cover 15 km and regional OSM place nodes cover 300 km. Beyond that, coverage is only the selected, incomplete bundled settlement catalogue.
+- Geometry is uniformly emissive within each settlement ellipse. Results are quantized by quadrature spacing, the 4096-sample cap, rings, and half-degree sectors.
+- Coverage is limited to the selected, incomplete bundled settlement catalogue. The OpenStreetMap base map is a location picker only and does not supply light-emission data.
 - The 300–1000 km tail is intentionally coarse; directional sources at or beyond 1000 km are reported but not propagated.
 - Rays are straight and unrefracted on a spherical Earth. The live solve uses a 60 km atmosphere top and fixed 0.15 km source/observer altitude.
 - Terrain, buildings, vegetation screening, resolved three-dimensional clouds, vertical weather soundings, polarization, ozone absorption, and within-band spectral lines are not modeled.
 - Multiple scattering is a scalar bounded closure that preserves the first-order angular pattern, not a full 3-D Monte Carlo solution.
 - Natural airglow, zodiacal light, moonlight, twilight, stars, and the Milky Way are outside the artificial-glow transfer solve and are added with separate rendering heuristics.
 - RGB, SQM, Bortle, and limiting magnitude are heuristic transforms of relative radiance. A measured upward-radiance inventory and local SQM calibration are required for predictive photometry.
-- Public Overpass availability varies. Timeout does not erase the regional model, but it lowers data specificity because local OSM refinement is missing.
