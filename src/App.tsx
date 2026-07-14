@@ -226,6 +226,7 @@ export default function App() {
             <div className="analysis-grid">
               <div><strong>{physicalGlow.emissionDiagnostics?.rings.length ?? 81}</strong><span>distance rings</span></div>
               <div><strong>{physicalGlow.result?.azimuthCount ?? 720}</strong><span>bearings</span></div>
+              <div><strong>{physicalGlow.result?.elevationDeg.length ?? 22}</strong><span>adaptive elevations</span></div>
               <div><strong>{physicalGlow.result?.wavelengthsNm.length ?? 8}</strong><span>spectral bands</span></div>
             </div>
             <RadianceBreakdown physicalGlow={physicalGlow} />

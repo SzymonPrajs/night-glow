@@ -3,6 +3,7 @@ import { STAR_CATALOG } from '../data/starCatalog'
 import { equatorialToHorizontal } from './astronomy'
 import { apparentStarMagnitude } from './starAppearance'
 import { NATURAL_SKY_LUMINANCE } from './appearance'
+import { solidAngleElevationWeights } from './physics'
 import type { Atmosphere, Location, SkyMetrics } from '../types'
 
 export type DirectionalGlowSample = {
@@ -51,22 +52,23 @@ export function meanPhysicalGlow(field: PhysicalGlowResult | undefined) {
   let green = 0
   let blue = 0
   let limitingMagnitude = 0
-  const samples = field.rgbRadiance.length / 3
-  for (let index = 0; index < samples; index += 1) {
-    red += finiteNonNegative(field.rgbRadiance[index * 3])
-    green += finiteNonNegative(field.rgbRadiance[index * 3 + 1])
-    blue += finiteNonNegative(field.rgbRadiance[index * 3 + 2])
-    limitingMagnitude += finiteNonNegative(field.directionalLimitingMagnitude[index])
+  const elevationWeights = solidAngleElevationWeights(field.elevationDeg)
+  for (let elevation = 0; elevation < field.elevationDeg.length; elevation += 1) {
+    const sampleWeight = elevationWeights[elevation] / field.azimuthCount
+    for (let azimuth = 0; azimuth < field.azimuthCount; azimuth += 1) {
+      const index = elevation * field.azimuthCount + azimuth
+      red += finiteNonNegative(field.rgbRadiance[index * 3]) * sampleWeight
+      green += finiteNonNegative(field.rgbRadiance[index * 3 + 1]) * sampleWeight
+      blue += finiteNonNegative(field.rgbRadiance[index * 3 + 2]) * sampleWeight
+      limitingMagnitude += finiteNonNegative(field.directionalLimitingMagnitude[index]) * sampleWeight
+    }
   }
-  red /= samples
-  green /= samples
-  blue /= samples
   return {
     red,
     green,
     blue,
     luminance: red * 0.2126 + green * 0.7152 + blue * 0.0722,
-    limitingMagnitude: limitingMagnitude / samples,
+    limitingMagnitude,
   }
 }
 

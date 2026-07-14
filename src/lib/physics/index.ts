@@ -1,6 +1,7 @@
 export * from './atmosphere'
 export * from './constants'
 export * from './convolution'
+export * from './elevationQuadrature'
 export * from './geometry'
 export * from './kernel'
 export * from './radiativeTransfer'

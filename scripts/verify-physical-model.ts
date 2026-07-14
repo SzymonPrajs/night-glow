@@ -12,11 +12,14 @@ import {
 import {
   buildAtmosphericKernel,
   buildAtmosphericKernelAsync,
+  computeUnitSourceSpectrum,
   convolveRingEmissionField,
   createRingConvolutionPlan,
   createRingEmissionField,
   DEFAULT_RELATIVE_AZIMUTHS_DEG,
+  DEFAULT_SKY_ELEVATIONS_DEG,
   sampleAtmosphericKernel,
+  solidAngleElevationWeights,
 } from '../src/lib/physics'
 import type { EllipseEmissionSource, EmissionGrid } from '../src/lib/emission'
 import { buildPhysicalGlowRenderGrid } from '../src/lib/physicalGlowRender'
@@ -36,6 +39,47 @@ assert.equal(regionalGrid.sectorCount, 720)
 assert.equal(regionalGrid.bands.length, 8)
 assert(regionalGrid.diagnostics.conservation.maxRelativeError < 1e-9)
 assert(lodzGrid.diagnostics.conservation.maxRelativeError < 1e-9)
+
+const solvedElevations = Float32Array.from(DEFAULT_SKY_ELEVATIONS_DEG)
+assert.equal(solvedElevations[0], 0)
+assert.equal(solvedElevations.at(-1), 90)
+assert(solvedElevations.every((value, index) =>
+  Number.isFinite(value) && (index === 0 || value > solvedElevations[index - 1])))
+assert(maximumElevationStep(solvedElevations, 0, 0.25) <= 0.12501)
+assert(maximumElevationStep(solvedElevations, 0.25, 3) <= 0.50001)
+assert(maximumElevationStep(solvedElevations, 3, 8) <= 1.00001)
+assert(maximumElevationStep(solvedElevations, 8, 20) <= 5.00001)
+assert(solvedElevations.filter((value) => value <= 10).length >= 15)
+assert(solvedElevations.length <= 24, 'Adaptive physical elevation grid must stay bounded')
+
+const solidAngleWeights = solidAngleElevationWeights(solvedElevations)
+assert(Math.abs(sum(solidAngleWeights) - 1) < 1e-12)
+assert(solidAngleWeights.every((weight) => Number.isFinite(weight) && weight >= 0))
+const sineHemisphereMean = Array.from(solvedElevations).reduce(
+  (mean, elevation, index) => mean + Math.sin(elevation * Math.PI / 180) * solidAngleWeights[index],
+  0,
+)
+assert(Math.abs(sineHemisphereMean - 0.5) < 1e-12)
+const denseQuadratureElevations = Float64Array.from({ length: 721 }, (_, index) => index * 0.125)
+const denseWeights = solidAngleElevationWeights(denseQuadratureElevations)
+const glowProfile = (elevation: number) => 1 + 3 * Math.exp(-elevation / 2)
+const adaptiveProfileMean = Array.from(solvedElevations).reduce(
+  (mean, elevation, index) => mean + glowProfile(elevation) * solidAngleWeights[index],
+  0,
+)
+const denseProfileMean = Array.from(denseQuadratureElevations).reduce(
+  (mean, elevation, index) => mean + glowProfile(elevation) * denseWeights[index],
+  0,
+)
+assert(Math.abs(adaptiveProfileMean - denseProfileMean) / denseProfileMean < 0.01)
+
+const horizonInterpolation = elevationInterpolationErrors(DEFAULT_SKY_ELEVATIONS_DEG)
+assert(horizonInterpolation.rms < 0.01,
+  `Adaptive horizon interpolation RMS was ${(horizonInterpolation.rms * 100).toFixed(2)}%`)
+assert(horizonInterpolation.p95 < 0.015,
+  `Adaptive horizon interpolation p95 was ${(horizonInterpolation.p95 * 100).toFixed(2)}%`)
+assert(horizonInterpolation.maximum < 0.12,
+  `Adaptive horizon interpolation maximum was ${(horizonInterpolation.maximum * 100).toFixed(2)}%`)
 
 const renderFixture = buildPhysicalGlowRenderGrid({
   azimuthCount: 2,
@@ -59,6 +103,16 @@ assert.deepEqual(
   [0, 2, 5, 10, 20, 45, 90],
 )
 assertFiniteNonNegative(renderFixture.rgbRadiance, 'Densified render radiance')
+const adaptiveRenderFixture = buildPhysicalGlowRenderGrid({
+  azimuthCount: 1,
+  elevationDeg: solvedElevations,
+  rgbRadiance: new Float32Array(solvedElevations.length * 3),
+})
+assert.equal(adaptiveRenderFixture.elevationDeg.length, 128)
+assert.deepEqual(
+  Array.from(adaptiveRenderFixture.elevationDeg).filter((value) => DEFAULT_SKY_ELEVATIONS_DEG.includes(value)),
+  DEFAULT_SKY_ELEVATIONS_DEG,
+)
 
 const footprint = occupiedCells(lodzGrid)
 const expectedBearing = bearingDegrees(observer, lodz.center)
@@ -81,6 +135,9 @@ const field = createRingEmissionField(
 const planStarted = performance.now()
 const plan = createRingConvolutionPlan(kernel, field.ringDistancesKm, field.sectorCount)
 const planMs = performance.now() - planStarted
+const planBytes = plan.kernelFrequencySpectrum.byteLength + plan.kernelMeanTransfer.byteLength
+assert(planBytes <= 120 * 2 ** 20,
+  `FFT plan ${(planBytes / 2 ** 20).toFixed(1)} MiB exceeds the 120 MiB budget`)
 assert.equal(plan.version, 2)
 assert.equal(plan.fftSize, 2048)
 assert.equal(DEFAULT_RELATIVE_AZIMUTHS_DEG[1], 0.5)
@@ -89,6 +146,9 @@ assert(fftDirectError < 2e-5, `FFT convolution must match direct circular summat
 const solveStarted = performance.now()
 const sky = convolveRingEmissionField(kernel, field, undefined, plan)
 const solveMs = performance.now() - solveStarted
+assert(solveMs < 1000, `Cached full-sky convolution took ${solveMs.toFixed(0)} ms`)
+assert.equal(sky.elevationsDeg.length, DEFAULT_SKY_ELEVATIONS_DEG.length)
+assert.equal(sky.radiance.length, DEFAULT_SKY_ELEVATIONS_DEG.length * SECTOR_COUNT * SPECTRAL_BANDS.length)
 
 assertFiniteNonNegative(sky.radiance, 'Lodz sky radiance')
 const peakBearing = broadbandPeakBearing(sky.radiance, 0, sky.azimuthsDeg)
@@ -232,6 +292,9 @@ const result = {
     cardinalPeakErrors,
     asyncKernelCancellationChecks: cancellationChecks,
     finiteNonNegative: true,
+    physicalElevationRows: solvedElevations.length,
+    horizonInterpolation,
+    adaptiveSolidAngleProfileError: Math.abs(adaptiveProfileMean - denseProfileMean) / denseProfileMean,
     renderElevationRows: renderFixture.elevationDeg.length,
     renderHorizonStepDeg: maximumElevationStep(renderFixture.elevationDeg, 0, 10),
   },
@@ -239,6 +302,7 @@ const result = {
     emission: emissionMs,
     kernel: kernelMs,
     fftPlan: planMs,
+    fftPlanMiB: planBytes / 2 ** 20,
     fullSkyConvolution: solveMs,
   },
 }
@@ -471,6 +535,53 @@ function assertFiniteNonNegative(values: Float32Array, label: string) {
   for (let index = 0; index < values.length; index += 1) {
     assert(Number.isFinite(values[index]) && values[index] >= 0, `${label} contains an invalid value at ${index}`)
   }
+}
+
+function elevationInterpolationErrors(nodes: readonly number[]) {
+  const fixtures = [
+    [1, 0], [10, 0], [30, 0], [75, 0], [150, 0], [400, 0], [800, 0],
+    [10, 30], [75, 30], [150, 30], [400, 30],
+    [75, 90], [400, 90], [75, 180], [400, 180],
+  ] as const
+  const truthElevations = Array.from({ length: 81 }, (_, index) => index * 0.125)
+  const horizonNodes = nodes.filter((elevation) => elevation <= 10)
+  const errors: number[] = []
+
+  for (const [distanceKm, relativeAzimuthDeg] of fixtures) {
+    const truth = truthElevations.map((elevation) =>
+      computeUnitSourceSpectrum(distanceKm, relativeAzimuthDeg, elevation).radiance)
+    const peak = Math.max(...truth.flatMap((row) => Array.from(row)))
+    let lower = 0
+    for (let truthIndex = 0; truthIndex < truthElevations.length; truthIndex += 1) {
+      const elevation = truthElevations[truthIndex]
+      while (lower + 1 < horizonNodes.length - 1 && horizonNodes[lower + 1] < elevation) lower += 1
+      const upper = Math.min(lower + 1, horizonNodes.length - 1)
+      const lowerElevation = horizonNodes[lower]
+      const upperElevation = horizonNodes[upper]
+      const lowerValues = truth[Math.round(lowerElevation / 0.125)]
+      const upperValues = truth[Math.round(upperElevation / 0.125)]
+      const mix = upperElevation > lowerElevation
+        ? (elevation - lowerElevation) / (upperElevation - lowerElevation)
+        : 0
+      for (let band = 0; band < truth[truthIndex].length; band += 1) {
+        const interpolated = lowerValues[band] + (upperValues[band] - lowerValues[band]) * mix
+        errors.push(Math.abs(interpolated - truth[truthIndex][band]) / Math.max(peak, 1e-30))
+      }
+    }
+  }
+
+  errors.sort((left, right) => left - right)
+  return {
+    rms: Math.sqrt(errors.reduce((total, error) => total + error * error, 0) / errors.length),
+    p95: errors[Math.floor(errors.length * 0.95)],
+    maximum: errors.at(-1) ?? 0,
+  }
+}
+
+function sum(values: ArrayLike<number>) {
+  let total = 0
+  for (let index = 0; index < values.length; index += 1) total += values[index]
+  return total
 }
 
 function maximumElevationStep(elevations: Float32Array, minimum: number, maximum: number) {

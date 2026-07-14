@@ -195,9 +195,9 @@ export type PhysicalGlowResult = {
   rgbRadiance: Float32Array
   /** Layout: [elevation][azimuth]. */
   directionalLimitingMagnitude: Float32Array
-  /** Layout: [ring][spectral band], averaged over output sky samples. */
+  /** Layout: [ring][spectral band], solid-angle averaged over the output hemisphere. */
   ringMeanSpectralRadiance: Float32Array
-  /** Layout: [ring][RGB channel], averaged over output sky samples. */
+  /** Layout: [ring][RGB channel], solid-angle averaged over the output hemisphere. */
   ringMeanRgbRadiance: Float32Array
   componentContributions: PhysicalGlowComponentContribution[]
   diagnostics: PhysicalGlowDiagnostics

@@ -84,10 +84,23 @@ export const DEFAULT_RELATIVE_AZIMUTHS_DEG = Object.freeze([
   ...inclusiveRange(35, 180, 5),
 ])
 
+/**
+ * Atmospheric radiance bends most sharply immediately above the horizon.
+ * These solved elevations keep the interpolation error there below one per
+ * cent at the 95th percentile while expanding to coarse zenith intervals.
+ * Keeping this list shared also makes atmosphere and FFT-plan caches stable
+ * across the hook, worker fallback, and direct physics API.
+ */
+export const DEFAULT_SKY_ELEVATIONS_DEG = Object.freeze([
+  0, 0.125, 0.25, 0.5,
+  1, 1.5, 2, 2.5, 3, 4, 5, 6, 7, 8, 10,
+  15, 20, 30, 45, 60, 75, 90,
+])
+
 export const DEFAULT_KERNEL_GRID: Readonly<KernelGridSpec> = Object.freeze({
   distancesKm: Object.freeze([0.125, 0.5, 1, 2, 4, 8, 16, 32, 48, 64, 96, 128, 192, 256, 384, 512, 768, 1000]),
   relativeAzimuthsDeg: DEFAULT_RELATIVE_AZIMUTHS_DEG,
-  elevationsDeg: Object.freeze([0, 2, 5, 10, 15, 20, 30, 45, 60, 75, 90]),
+  elevationsDeg: DEFAULT_SKY_ELEVATIONS_DEG,
 })
 
 export const TWO_PI = Math.PI * 2

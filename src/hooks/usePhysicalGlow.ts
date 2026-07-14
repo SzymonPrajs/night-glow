@@ -13,9 +13,9 @@ import type {
   PhysicalGlowResult,
   PhysicalGlowWorkerMessage,
 } from '../lib/physicalGlowProtocol'
+import { DEFAULT_SKY_ELEVATIONS_DEG } from '../lib/physics'
 import type { Atmosphere, LightSource, Location } from '../types'
 
-const ELEVATION_NODES = new Float32Array([0, 2, 5, 10, 15, 20, 30, 45, 60, 75, 90])
 const EMPTY_COMPONENTS: PhysicalGlowProgressBreakdown = {
   emission: 0,
   kernel: 0,
@@ -23,10 +23,10 @@ const EMPTY_COMPONENTS: PhysicalGlowProgressBreakdown = {
   diagnostics: 0,
 }
 const DEFAULT_WEIGHTS: PhysicalGlowProgressWeights = {
-  emission: 0.14,
-  kernel: 0.48,
-  propagation: 0.3,
-  diagnostics: 0.08,
+  emission: 0.08,
+  kernel: 0.8,
+  propagation: 0.08,
+  diagnostics: 0.04,
 }
 
 export type PhysicalGlowAnalysisState = {
@@ -174,7 +174,7 @@ export function usePhysicalGlow(
           emission: cached
             ? { kind: 'cache', cacheKey: emissionCacheKey }
             : { kind: 'inline', cacheKey: emissionCacheKey, grid: protocolGrid! },
-          kernel: { kind: 'auto', elevationDeg: ELEVATION_NODES.slice() },
+          kernel: { kind: 'auto', elevationDeg: Float32Array.from(DEFAULT_SKY_ELEVATIONS_DEG) },
           options: {
             debounceMs: 80,
             progressWeights: DEFAULT_WEIGHTS,

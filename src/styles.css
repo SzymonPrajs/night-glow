@@ -241,7 +241,7 @@ button { color: inherit; }
 .solver-timings i { color: #60758d; font-size: 6px; letter-spacing: .05em; text-transform: uppercase; }
 .solver-timings strong { margin-top: 2px; color: #8da5bf; font-family: 'DM Mono', monospace; font-size: 6px; font-weight: 400; }
 
-.analysis-grid { display: grid; grid-template-columns: repeat(3, 1fr); }
+.analysis-grid { display: grid; grid-template-columns: repeat(4, 1fr); }
 .analysis-grid > div { display: flex; flex-direction: column; gap: 3px; padding: 0 8px; border-right: 1px solid rgba(178, 205, 235, .1); }
 .analysis-grid > div:first-child { padding-left: 0; }
 .analysis-grid > div:last-child { border-right: 0; }

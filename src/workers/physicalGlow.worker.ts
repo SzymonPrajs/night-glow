@@ -16,9 +16,11 @@ import {
   createRingConvolutionPlan,
   createRingEmissionField,
   DEFAULT_RELATIVE_AZIMUTHS_DEG,
+  DEFAULT_SKY_ELEVATIONS_DEG,
   normalizeAtmosphere,
   normalizeRadiativeTransferOptions,
   ringConvolutionPlanCacheKey,
+  solidAngleElevationWeights,
   type AtmosphereInput,
   type AtmosphericKernel,
   type KernelGridSpec,
@@ -240,7 +242,13 @@ async function analyze(request: PhysicalGlowAnalyzeRequest) {
       bands.length,
       spectralToRgb,
     )
-    const statistics = fieldStatistics(spectralSky.radiance, rgbRadiance, bands.length)
+    const statistics = fieldStatistics(
+      spectralSky.radiance,
+      rgbRadiance,
+      bands.length,
+      spectralSky.elevationsDeg,
+      emission.sectorCount,
+    )
     const totalInputSpectralFlux = sumInputSpectrum(emission)
     const componentFluxResidual = calculateComponentFluxResidual(emission, totalInputSpectralFlux)
     const distantContributionFraction = distantContributionFractionFromRings(
@@ -412,7 +420,7 @@ function makeKernelGrid(ringRadii: ArrayLike<number>, request: PhysicalGlowAnaly
     ? request.kernel.elevationDeg
     : request.kernel.kind === 'inline'
       ? request.kernel.kernel.elevationDeg
-      : lruGet(kernelCache, request.kernel.cacheKey)?.grid.elevationsDeg ?? [0, 2, 5, 10, 15, 20, 30, 45, 60, 75, 90]
+      : lruGet(kernelCache, request.kernel.cacheKey)?.grid.elevationsDeg ?? DEFAULT_SKY_ELEVATIONS_DEG
   return {
     distancesKm: [...new Set(distanceCandidates.filter((value) => value <= maximumDistance).concat(maximumDistance))].sort((a, b) => a - b),
     relativeAzimuthsDeg: DEFAULT_RELATIVE_AZIMUTHS_DEG,
@@ -475,6 +483,7 @@ function calculateRingContributions(
 ) {
   const ringCount = emission.ringRadiiKm.length
   const elevationCount = plan.elevationsDeg.length
+  const elevationWeights = solidAngleElevationWeights(plan.elevationsDeg)
   const ringMeanSpectralRadiance = new Float32Array(ringCount * bandCount)
   for (let ring = 0; ring < ringCount; ring += 1) {
     for (let band = 0; band < bandCount; band += 1) {
@@ -485,9 +494,9 @@ function calculateRingContributions(
       let meanTransfer = 0
       for (let elevation = 0; elevation < elevationCount; elevation += 1) {
         const index = ((elevation * ringCount + ring) * bandCount + band)
-        meanTransfer += plan.kernelMeanTransfer[index]
+        meanTransfer += plan.kernelMeanTransfer[index] * elevationWeights[elevation]
       }
-      ringMeanSpectralRadiance[ring * bandCount + band] = Math.max(0, sourceFlux * meanTransfer / elevationCount)
+      ringMeanSpectralRadiance[ring * bandCount + band] = Math.max(0, sourceFlux * meanTransfer)
     }
   }
   return {
@@ -504,6 +513,7 @@ function calculateComponentContributions(
 ) {
   const ringCount = emission.ringRadiiKm.length
   const elevationCount = plan.elevationsDeg.length
+  const elevationWeights = solidAngleElevationWeights(plan.elevationsDeg)
   return (emission.components ?? []).map((component) => {
     const meanSpectralRadiance = new Float32Array(bandCount)
     for (let band = 0; band < bandCount; band += 1) {
@@ -512,9 +522,9 @@ function calculateComponentContributions(
         let meanTransfer = 0
         for (let elevation = 0; elevation < elevationCount; elevation += 1) {
           const index = ((elevation * ringCount + ring) * bandCount + band)
-          meanTransfer += plan.kernelMeanTransfer[index]
+          meanTransfer += plan.kernelMeanTransfer[index] * elevationWeights[elevation]
         }
-        total += component.ringSpectralFlux[ring * bandCount + band] * meanTransfer / elevationCount
+        total += component.ringSpectralFlux[ring * bandCount + band] * meanTransfer
       }
       meanSpectralRadiance[band] = Math.max(0, total)
     }
@@ -583,31 +593,45 @@ function gaussian(value: number, center: number, width: number) {
   return Math.exp(-0.5 * ((value - center) / width) ** 2)
 }
 
-function fieldStatistics(spectral: Float32Array, rgb: Float32Array, bandCount: number) {
+function fieldStatistics(
+  spectral: Float32Array,
+  rgb: Float32Array,
+  bandCount: number,
+  elevationsDeg: readonly number[],
+  azimuthCount: number,
+) {
   const meanSpectral = Array.from({ length: bandCount }, () => 0)
   const meanRgb: [number, number, number] = [0, 0, 0]
+  const elevationWeights = solidAngleElevationWeights(elevationsDeg)
   let minimum = Number.POSITIVE_INFINITY
   let maximum = 0
   let nonFinite = 0
   let negative = 0
-  const samples = spectral.length / bandCount
-  spectral.forEach((value, index) => {
-    if (!Number.isFinite(value)) nonFinite += 1
-    if (value < 0) negative += 1
-    const safe = Number.isFinite(value) && value > 0 ? value : 0
-    minimum = Math.min(minimum, safe)
-    maximum = Math.max(maximum, safe)
-    meanSpectral[index % bandCount] += safe / samples
-  })
-  const rgbSamples = rgb.length / 3
-  rgb.forEach((value, index) => {
-    if (!Number.isFinite(value)) nonFinite += 1
-    if (value < 0) negative += 1
-    const safe = Number.isFinite(value) && value > 0 ? value : 0
-    minimum = Math.min(minimum, safe)
-    maximum = Math.max(maximum, safe)
-    meanRgb[index % 3] += safe / rgbSamples
-  })
+  for (let elevation = 0; elevation < elevationsDeg.length; elevation += 1) {
+    const sampleWeight = elevationWeights[elevation] / azimuthCount
+    for (let azimuth = 0; azimuth < azimuthCount; azimuth += 1) {
+      const spectralBase = (elevation * azimuthCount + azimuth) * bandCount
+      for (let band = 0; band < bandCount; band += 1) {
+        const value = spectral[spectralBase + band]
+        if (!Number.isFinite(value)) nonFinite += 1
+        if (value < 0) negative += 1
+        const safe = Number.isFinite(value) && value > 0 ? value : 0
+        minimum = Math.min(minimum, safe)
+        maximum = Math.max(maximum, safe)
+        meanSpectral[band] += safe * sampleWeight
+      }
+      const rgbBase = (elevation * azimuthCount + azimuth) * 3
+      for (let channel = 0; channel < 3; channel += 1) {
+        const value = rgb[rgbBase + channel]
+        if (!Number.isFinite(value)) nonFinite += 1
+        if (value < 0) negative += 1
+        const safe = Number.isFinite(value) && value > 0 ? value : 0
+        minimum = Math.min(minimum, safe)
+        maximum = Math.max(maximum, safe)
+        meanRgb[channel] += safe * sampleWeight
+      }
+    }
+  }
   return { meanSpectral, meanRgb, minimum: Number.isFinite(minimum) ? minimum : 0, maximum, nonFinite, negative }
 }
 
