@@ -110,7 +110,41 @@ function realisticStarAppearance(
 export function apparentStarMagnitude(star: Pick<CatalogStar, 'mag'>, altitude: number, atmosphere: Atmosphere) {
   const extraColumn = Math.max(0, relativeAirMass(altitude) - 1)
   const extinctionPerAirMass = 0.075 + atmosphere.aerosol * 0.24 + atmosphere.humidity * 0.1
-  return star.mag + clamp(extraColumn * extinctionPerAirMass, 0, 3.5)
+  return star.mag
+    + clamp(extraColumn * extinctionPerAirMass, 0, 3.5)
+    + directCloudExtinction(altitude, atmosphere)
+}
+
+/**
+ * Mean direct transmission through an unresolved, randomly covered cloud field.
+ * Clear sightlines carry (1-C) of the flux while cloudy sightlines carry
+ * C exp(-tau X). This attenuates celestial objects without modifying the
+ * separately solved artificial-light glow field.
+ */
+export function directCloudTransmission(
+  altitude: number,
+  atmosphere: Pick<Atmosphere, 'cloud' | 'cloudOpticalDepth'>,
+) {
+  const coverage = finiteClamp(atmosphere.cloud, 0, 1, 0)
+  const opticalDepth = finiteClamp(atmosphere.cloudOpticalDepth, 0, 100, 0)
+  const cloudyTransmission = Math.exp(-opticalDepth * relativeAirMass(altitude))
+  return clamp((1 - coverage) + coverage * cloudyTransmission, 0, 1)
+}
+
+export function directCloudExtinction(
+  altitude: number,
+  atmosphere: Pick<Atmosphere, 'cloud' | 'cloudOpticalDepth'>,
+) {
+  return -2.5 * Math.log10(Math.max(directCloudTransmission(altitude, atmosphere), 1e-12))
+}
+
+export function cloudAdjustedLimitingMagnitude(
+  backgroundLimitingMagnitude: number,
+  altitude: number,
+  atmosphere: Pick<Atmosphere, 'cloud' | 'cloudOpticalDepth'>,
+) {
+  const backgroundLimit = Number.isFinite(backgroundLimitingMagnitude) ? backgroundLimitingMagnitude : 0
+  return backgroundLimit - directCloudExtinction(altitude, atmosphere)
 }
 
 /** Shared physical selection/fade used by every presentation mode. */
@@ -170,10 +204,14 @@ function smoothstep(minimum: number, maximum: number, value: number) {
   return mix * mix * (3 - 2 * mix)
 }
 
-function relativeAirMass(altitude: number) {
-  const safeAltitude = clamp(altitude, 0.25, 90)
+export function relativeAirMass(altitude: number) {
+  const safeAltitude = clamp(Number.isFinite(altitude) ? altitude : 90, 0.25, 90)
   const sine = Math.sin((safeAltitude * Math.PI) / 180)
   return clamp(1 / (sine + 0.50572 * (safeAltitude + 6.07995) ** -1.6364), 1, 20)
+}
+
+function finiteClamp(value: number, minimum: number, maximum: number, fallback: number) {
+  return clamp(Number.isFinite(value) ? value : fallback, minimum, maximum)
 }
 
 function spectralTypeBv(spectralType: string) {

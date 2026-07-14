@@ -1,7 +1,7 @@
 import type { PhysicalGlowResult } from './physicalGlowProtocol'
 import { STAR_CATALOG } from '../data/starCatalog'
 import { equatorialToHorizontal } from './astronomy'
-import { apparentStarMagnitude } from './starAppearance'
+import { apparentStarMagnitude, cloudAdjustedLimitingMagnitude } from './starAppearance'
 import { NATURAL_SKY_LUMINANCE } from './appearance'
 import { solidAngleElevationWeights } from './physics'
 import type { Atmosphere, Location, SkyMetrics } from '../types'
@@ -117,7 +117,11 @@ export function calculatePhysicalSkyMetrics(
   const brightnessRatio = 1 + zenith.luminance / naturalLuminance + twilight * 180 + moonLight * 8
   const zenithMag = clamp(21.92 - 2.5 * Math.log10(brightnessRatio), 14, 21.92)
   const lightPenalty = twilight * 5 + moonLight * 1.35
-  const limitingMagnitude = clamp(zenith.limitingMagnitude - lightPenalty, 0, 7.15)
+  const limitingMagnitude = clamp(
+    cloudAdjustedLimitingMagnitude(zenith.limitingMagnitude - lightPenalty, 90, atmosphere),
+    0,
+    7.15,
+  )
   let visibleStars = 0
 
   for (const star of STAR_CATALOG) {

@@ -13,6 +13,10 @@ import {
   realisticDispersionArcsec,
   realisticStarPeak,
   apparentStarMagnitude,
+  cloudAdjustedLimitingMagnitude,
+  directCloudExtinction,
+  directCloudTransmission,
+  relativeAirMass,
   starAppearance,
   starVisibility,
   type StarAppearance,
@@ -32,6 +36,44 @@ const atmosphere: Atmosphere = {
   cloudOpticalDepth: 8,
   groundAlbedo: 0.14,
   maxScatteringOrder: 3,
+}
+
+const clearAtmosphere = { ...atmosphere, cloud: 0 }
+const brokenCloudAtmosphere = { ...atmosphere, cloud: 0.5, cloudOpticalDepth: 1 }
+const zenithCloudTransmission = 0.5 + 0.5 * Math.exp(-relativeAirMass(90))
+assertAlmostEqual(directCloudTransmission(90, brokenCloudAtmosphere), zenithCloudTransmission, 1e-12)
+assertAlmostEqual(
+  directCloudExtinction(90, brokenCloudAtmosphere),
+  -2.5 * Math.log10(zenithCloudTransmission),
+  1e-12,
+)
+assertAlmostEqual(directCloudTransmission(20, clearAtmosphere), 1, 1e-12)
+assertAlmostEqual(directCloudExtinction(20, clearAtmosphere), 0, 1e-12)
+assertAlmostEqual(directCloudTransmission(20, { cloud: 0.7, cloudOpticalDepth: 0 }), 1, 1e-12)
+assert(directCloudTransmission(10, brokenCloudAtmosphere) < directCloudTransmission(90, brokenCloudAtmosphere))
+assert(directCloudExtinction(10, brokenCloudAtmosphere) > directCloudExtinction(90, brokenCloudAtmosphere))
+assertAlmostEqual(directCloudTransmission(90, { cloud: 0.25, cloudOpticalDepth: 100 }), 0.75, 1e-12)
+assertAlmostEqual(directCloudExtinction(90, { cloud: 1, cloudOpticalDepth: 100 }), 30, 1e-12)
+assertAlmostEqual(directCloudTransmission(Number.NaN, { cloud: Number.NaN, cloudOpticalDepth: Infinity }), 1, 1e-12)
+assertAlmostEqual(directCloudTransmission(90, { cloud: 2, cloudOpticalDepth: -1 }), 1, 1e-12)
+assertAlmostEqual(
+  cloudAdjustedLimitingMagnitude(6.5, 90, brokenCloudAtmosphere),
+  6.5 - directCloudExtinction(90, brokenCloudAtmosphere),
+  1e-12,
+)
+assertAlmostEqual(cloudAdjustedLimitingMagnitude(Number.NaN, 90, clearAtmosphere), 0, 1e-12)
+
+const cloudTestStar = makeStar('Cloud extinction test', 3, 0.65, 'G2V')
+const cloudMagnitudeShift = apparentStarMagnitude(cloudTestStar, 20, brokenCloudAtmosphere)
+  - apparentStarMagnitude(cloudTestStar, 20, clearAtmosphere)
+assertAlmostEqual(cloudMagnitudeShift, directCloudExtinction(20, brokenCloudAtmosphere), 1e-12)
+for (const mode of ['atlas', 'realistic'] as const) {
+  const visible = starAppearance(cloudTestStar, 20, 7.15, brokenCloudAtmosphere, mode).opacity > 0
+  assert.equal(
+    visible,
+    starVisibility(apparentStarMagnitude(cloudTestStar, 20, brokenCloudAtmosphere), 7.15) > 0,
+    `${mode} must use the same cloud-extinguished stellar support`,
+  )
 }
 
 assert.deepEqual(APPEARANCE_PROFILES.atlas, {
@@ -200,6 +242,13 @@ assert(realisticDispersionArcsec(5) > realisticDispersionArcsec(20))
 
 console.log(JSON.stringify({
   profiles: APPEARANCE_PROFILES,
+  cloudExtinction: {
+    zenithAirMass: relativeAirMass(90),
+    zenithTransmission: directCloudTransmission(90, brokenCloudAtmosphere),
+    zenithMagnitudeLoss: directCloudExtinction(90, brokenCloudAtmosphere),
+    tenDegreeTransmission: directCloudTransmission(10, brokenCloudAtmosphere),
+    tenDegreeMagnitudeLoss: directCloudExtinction(10, brokenCloudAtmosphere),
+  },
   sky: {
     ratios: skyRatios,
     displayLuminance: skyDisplayLuminance,

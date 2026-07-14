@@ -8,7 +8,13 @@ import { physicalZenithSample, samplePhysicalGlow } from '../lib/physicalGlowFie
 import type { PhysicalGlowResult } from '../lib/physicalGlowProtocol'
 import { buildPhysicalGlowRenderGrid } from '../lib/physicalGlowRender'
 import { clamp } from '../lib/skyModel'
-import { apparentStarMagnitude, starAppearance } from '../lib/starAppearance'
+import {
+  apparentStarMagnitude,
+  cloudAdjustedLimitingMagnitude,
+  directCloudExtinction,
+  directCloudTransmission,
+  starAppearance,
+} from '../lib/starAppearance'
 import { createLabelTexture, createMoonTexture, createOrbTexture, MILKY_WAY_POINTS } from '../lib/starField'
 import type { AppearanceMode, Atmosphere, Location, SkyMetrics } from '../types'
 
@@ -343,8 +349,8 @@ export default function SkyCanvas({
     rebuildStars(refs, location, date, metrics, atmosphere, appearanceMode, glowField)
     updateStarDispersionScale(refs)
     rebuildMilkyWay(refs, location, date, metrics, atmosphere, appearanceMode, glowField)
-    rebuildDeepSky(refs, location, date, metrics, appearanceMode, glowField)
-    rebuildSolarSystem(refs, solarSystem, metrics, appearanceMode, glowField)
+    rebuildDeepSky(refs, location, date, metrics, atmosphere, appearanceMode, glowField)
+    rebuildSolarSystem(refs, solarSystem, metrics, atmosphere, appearanceMode, glowField)
     rebuildPhysicalGlows(refs, glowField, appearanceMode, sun?.altitude ?? -30, moonLight)
   }, [location, date, metrics, atmosphere, solarSystem, glowField, appearanceMode, moonLight])
 
@@ -420,13 +426,13 @@ function rebuildStars(
   const haloWidths: number[] = []
   const haloStrengths: number[] = []
   const dispersions: number[] = []
-  const globalLightPenalty = directionalLightPenalty(glowField, metrics)
+  const globalLightPenalty = directionalLightPenalty(glowField, metrics, atmosphere)
   for (const star of STAR_CATALOG) {
     const horizontal = equatorialToHorizontal(star.ra, star.dec, date, location)
     const vector = horizontalVector(horizontal.azimuth, horizontal.altitude, 102)
     const directionalLimit = glowField
       ? samplePhysicalGlow(glowField, horizontal.azimuth, horizontal.altitude).limitingMagnitude - globalLightPenalty
-      : metrics.limitingMagnitude
+      : metrics.limitingMagnitude + directCloudExtinction(90, atmosphere)
     const appearance = starAppearance(
       star,
       horizontal.altitude,
@@ -460,13 +466,14 @@ function rebuildStars(
     if (horizontal.altitude < 3) continue
     const localLimit = glowField
       ? samplePhysicalGlow(glowField, horizontal.azimuth, horizontal.altitude).limitingMagnitude - globalLightPenalty
-      : metrics.limitingMagnitude
+      : metrics.limitingMagnitude + directCloudExtinction(90, atmosphere)
     if (apparentStarMagnitude(star, horizontal.altitude, atmosphere) >= localLimit) continue
     const vector = horizontalVector(horizontal.azimuth, horizontal.altitude, 96)
     const label = makeLabel(
       `${star.name}  ·  ${star.constellation}`,
       appearanceMode === 'realistic' ? '#c9d0d5' : '#a9cfff',
-      appearanceMode === 'realistic' ? 0.58 : 0.92,
+      (appearanceMode === 'realistic' ? 0.58 : 0.92)
+        * directCloudTransmission(horizontal.altitude, atmosphere),
       appearanceMode === 'realistic' ? 5.7 : 7.2,
     )
     label.position.set(vector.x, vector.y + 1.4, vector.z)
@@ -484,7 +491,7 @@ function rebuildMilkyWay(
   glowField?: PhysicalGlowResult,
 ) {
   clearGroup(refs.milkyWayGroup)
-  const globalLightPenalty = directionalLightPenalty(glowField, metrics)
+  const globalLightPenalty = directionalLightPenalty(glowField, metrics, atmosphere)
   const positions: number[] = []
   const colors: number[] = []
   const sizes: number[] = []
@@ -494,15 +501,22 @@ function rebuildMilkyWay(
     const horizontal = equatorialToHorizontal(equatorial.ra, equatorial.dec, date, location)
     const localLimit = glowField
       ? samplePhysicalGlow(glowField, horizontal.azimuth, horizontal.altitude).limitingMagnitude - globalLightPenalty
-      : metrics.limitingMagnitude
-    const visibility = clamp((localLimit - 4.55) / 2.2, 0, 1) * (1 - atmosphere.cloud * 0.86)
+      : metrics.limitingMagnitude + directCloudExtinction(90, atmosphere)
+    const cloudTransmission = directCloudTransmission(horizontal.altitude, atmosphere)
+    const effectiveLimit = cloudAdjustedLimitingMagnitude(localLimit, horizontal.altitude, atmosphere)
+    const visibility = clamp((effectiveLimit - 4.55) / 2.2, 0, 1)
     if (visibility < 0.025) continue
     const vector = horizontalVector(horizontal.azimuth, horizontal.altitude, 108)
     positions.push(vector.x, vector.y, vector.z)
     if (appearanceMode === 'realistic') colors.push(0.44, 0.47, 0.5)
     else colors.push(0.55, 0.67, 0.8)
     sizes.push(appearanceMode === 'realistic' ? 0.75 + point.intensity * 0.8 : 1.1 + point.intensity * 1.45)
-    opacities.push(point.intensity * visibility * APPEARANCE_PROFILES[appearanceMode].milkyWayOpacity)
+    opacities.push(
+      point.intensity
+      * visibility
+      * cloudTransmission
+      * APPEARANCE_PROFILES[appearanceMode].milkyWayOpacity,
+    )
   }
   if (!positions.length) return
   const geometry = new THREE.BufferGeometry()
@@ -518,19 +532,22 @@ function rebuildDeepSky(
   location: Location,
   date: Date,
   metrics: SkyMetrics,
+  atmosphere: Atmosphere,
   appearanceMode: AppearanceMode,
   glowField?: PhysicalGlowResult,
 ) {
   clearGroup(refs.deepGroup)
-  const globalLightPenalty = directionalLightPenalty(glowField, metrics)
+  const globalLightPenalty = directionalLightPenalty(glowField, metrics, atmosphere)
   for (const object of DEEP_SKY) {
     const required = object.kind === 'cluster' ? object.mag - 0.6 : object.mag + 1.25
     const horizontal = equatorialToHorizontal(object.ra, object.dec, date, location)
     if (horizontal.altitude < 1) continue
     const localLimit = glowField
       ? samplePhysicalGlow(glowField, horizontal.azimuth, horizontal.altitude).limitingMagnitude - globalLightPenalty
-      : metrics.limitingMagnitude
-    if (localLimit < required) continue
+      : metrics.limitingMagnitude + directCloudExtinction(90, atmosphere)
+    const cloudTransmission = directCloudTransmission(horizontal.altitude, atmosphere)
+    const effectiveLimit = cloudAdjustedLimitingMagnitude(localLimit, horizontal.altitude, atmosphere)
+    if (effectiveLimit < required) continue
     const vector = horizontalVector(horizontal.azimuth, horizontal.altitude, 98)
     const color = appearanceMode === 'realistic'
       ? '#d0d5d2'
@@ -540,15 +557,15 @@ function rebuildDeepSky(
       color,
       appearanceMode === 'realistic' ? 'rgba(214, 220, 218, .07)' : 'rgba(117, 155, 214, .25)',
       appearanceMode === 'realistic' ? atlasScale * 0.56 : atlasScale,
-      APPEARANCE_PROFILES[appearanceMode].deepSkyOpacity,
+      APPEARANCE_PROFILES[appearanceMode].deepSkyOpacity * cloudTransmission,
     )
     sprite.position.set(vector.x, vector.y, vector.z)
     refs.deepGroup.add(sprite)
-    if (localLimit > 5.1 || object.mag < 4.2) {
+    if (effectiveLimit > 5.1 || object.mag < 4.2) {
       const label = makeLabel(
         `${object.catalog}  ${object.name}`,
         color,
-        appearanceMode === 'realistic' ? 0.52 : 0.92,
+        (appearanceMode === 'realistic' ? 0.52 : 0.92) * cloudTransmission,
         appearanceMode === 'realistic' ? 5.4 : 7.2,
       )
       label.position.set(vector.x, vector.y + 1.5, vector.z)
@@ -561,17 +578,20 @@ function rebuildSolarSystem(
   refs: SceneRefs,
   objects: HorizontalObject[],
   metrics: SkyMetrics,
+  atmosphere: Atmosphere,
   appearanceMode: AppearanceMode,
   glowField?: PhysicalGlowResult,
 ) {
   clearGroup(refs.planetGroup)
-  const globalLightPenalty = directionalLightPenalty(glowField, metrics)
+  const globalLightPenalty = directionalLightPenalty(glowField, metrics, atmosphere)
   for (const object of objects) {
     if (object.altitude < -3) continue
     const localLimit = glowField
       ? samplePhysicalGlow(glowField, object.azimuth, object.altitude).limitingMagnitude - globalLightPenalty
-      : metrics.limitingMagnitude
-    if (object.kind === 'planet' && object.magnitude > localLimit) continue
+      : metrics.limitingMagnitude + directCloudExtinction(90, atmosphere)
+    const cloudTransmission = directCloudTransmission(object.altitude, atmosphere)
+    const effectiveLimit = cloudAdjustedLimitingMagnitude(localLimit, object.altitude, atmosphere)
+    if (object.kind === 'planet' && object.magnitude > effectiveLimit) continue
     const vector = horizontalVector(object.azimuth, object.altitude, 92)
     const style = planetStyle(object.name)
     const atlasScale = object.kind === 'sun' ? 8 : object.kind === 'moon' ? 5.5 : clamp(4.3 - object.magnitude * 0.35, 2.1, 5.5)
@@ -580,19 +600,23 @@ function rebuildSolarSystem(
       : atlasScale
     const color = appearanceMode === 'realistic' ? subduedColor(style.color) : style.color
     const orb = appearanceMode === 'realistic' && object.kind === 'moon'
-      ? makeMoonOrb(object.phase ?? 0, scale, APPEARANCE_PROFILES.realistic.planetOpacity)
+      ? makeMoonOrb(
+          object.phase ?? 0,
+          scale,
+          APPEARANCE_PROFILES.realistic.planetOpacity * cloudTransmission,
+        )
       : makeOrb(
           color,
           appearanceMode === 'realistic' ? 'rgba(255, 255, 255, .09)' : style.halo,
           scale,
-          APPEARANCE_PROFILES[appearanceMode].planetOpacity,
+          APPEARANCE_PROFILES[appearanceMode].planetOpacity * cloudTransmission,
         )
     orb.position.set(vector.x, vector.y, vector.z)
     refs.planetGroup.add(orb)
     const label = makeLabel(
       `${object.name}${object.kind === 'moon' ? `  ${Math.round((object.phase ?? 0) * 100)}%` : ''}`,
       color,
-      appearanceMode === 'realistic' ? 0.62 : 0.92,
+      (appearanceMode === 'realistic' ? 0.62 : 0.92) * cloudTransmission,
       appearanceMode === 'realistic' ? 5.8 : 7.2,
     )
     label.position.set(vector.x, vector.y + scale * 0.45, vector.z)
@@ -694,9 +718,18 @@ function rebuildPhysicalGlows(
   refs.glowGroup.add(new THREE.Mesh(geometry, material))
 }
 
-function directionalLightPenalty(field: PhysicalGlowResult | undefined, metrics: SkyMetrics) {
+function directionalLightPenalty(
+  field: PhysicalGlowResult | undefined,
+  metrics: SkyMetrics,
+  atmosphere: Atmosphere,
+) {
   if (!field) return 0
-  return Math.max(0, physicalZenithSample(field).limitingMagnitude - metrics.limitingMagnitude)
+  return Math.max(
+    0,
+    physicalZenithSample(field).limitingMagnitude
+      - metrics.limitingMagnitude
+      - directCloudExtinction(90, atmosphere),
+  )
 }
 
 function makePointMaterial(
