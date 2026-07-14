@@ -25,6 +25,7 @@ Run the deterministic conservation/direction benchmark with `npm run test:physic
 - Astronomy Engine supplies time- and observer-specific positions for the Sun, Moon, and planets. The bundled CDS/VizieR Yale Bright Star Catalogue supplies 8,404 catalogued stars through visual magnitude 6.5, including J2000 positions, Johnson V and B−V photometry, and MK spectral classifications.
 - Stellar magnitude controls the point-spread size and intensity. B−V and spectral type set the intrinsic colour; air mass, aerosol, humidity, and cloud settings then add extinction, reddening, seeing halos, and chromatic atmospheric dispersion.
 - Directional sky quality and limiting magnitude feed the visibility of stars, the Milky Way, clusters, nebulae, galaxies, and planets. Moonlight and twilight are applied separately.
+- Realistic and Atlas modes use the same physical glow field, object visibility decisions, summary values, and visible-star count. Realistic uses natural low-light colour and a bounded 1.6× stellar display lift for screen legibility; Atlas exaggerates the same stars and glow with broader, brighter, more colourful presentation.
 
 The complete equations, conservation rules, cache design, performance measurements, verification, and limitations are in [docs/physical-glow-model.md](docs/physical-glow-model.md). The light model is an exploratory relative-radiance estimate, not calibrated photometry or a substitute for an all-sky light-pollution survey.
 

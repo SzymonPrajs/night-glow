@@ -221,7 +221,7 @@ The glow itself is a 720-bearing vertex-colour mesh on the sky dome. The 22 phys
 
 ### 6.1 Atlas and Realistic presentation
 
-The solver field is independent of the selected presentation. **Atlas** retains the enhanced object colours, broad stellar sprites, and high-exposure glow useful for finding objects. **Realistic** is the default human-view approximation. Changing between them rebuilds only GPU geometry/materials and never starts a worker request.
+The solver field and every visibility decision are independent of the selected presentation. Both modes therefore show the same physical star and object set, the same visible-star count and summary values, and the same directional glow field. **Atlas** uses enhanced object colours, broad stellar sprites, and high-exposure glow so the modeled effects are easy to inspect. **Realistic** is the default human-view approximation. Changing between them rebuilds only GPU geometry/materials and never starts a worker request.
 
 Realistic mode combines natural sky, astronomical twilight, moonlight, and artificial radiance before applying one relative eye/display response. With total luminance (Y) and the natural reference (Y_0=0.0020016), the linear SDR target is
 
@@ -245,13 +245,14 @@ F_\star=0.35\,10^{-0.4m_{\rm apparent}}V,
 
 where (V) is a smooth half-magnitude detection fade. The Gaussian core plus atmospheric halo is integral-normalized, so broader seeing redistributes this signal without creating energy. Consequently a magnitude-zero star carries exactly 100 times the integrated signal of a magnitude-five star before clipping. The sampled core FWHM is approximately 0.9–1.3 CSS pixels. Atmospheric dispersion is calculated in arcseconds from (1.2\cot(h)), converted using the live canvas height and vertical field of view, and capped at 0.35 pixel. Stellar colour keeps spectral ordering but its chroma falls from at most about 0.34 for the very brightest objects to 0.04 by magnitude three.
 
-For consistency, the Realistic summary and catalogue count use the same conservative visual threshold as the renderer:
+The shared fade (V) depends only on apparent magnitude and the physical directional limit. It is evaluated identically for Atlas and Realistic, so changing presentation cannot add or remove a star. Realistic applies a bounded display-only gain after the physical PSF signal has been assembled:
 
 \[
-m_{\rm realistic}=\min\left[m_{\rm physical},\;7.15-0.8(21.92-\mathrm{SQM})\right].
+S_{\rm display}=S_{\rm linear}\,
+\frac{1.6}{1+0.6S_{\rm linear}}.
 \]
 
-This empirical presentation threshold does not feed back into atmospheric transport. It prevents an urban Realistic view from hiding faint stars while still claiming an Atlas-style sixth-magnitude limit.
+The gain approaches 1.6 for faint signals and rolls smoothly back to one at a unit signal. The lifted linear-light signal then receives the same linear-to-sRGB display transfer as the sky and Milky Way. This makes faint but physically visible stars legible without hard clipping bright ones. It does not alter catalogue membership, the integrated 100:1 magnitude-zero-to-five signal ratio before presentation, limiting magnitude, visible-star count, or atmospheric transport. Atlas applies its stronger size, colour, halo, and glow mappings to those same physical inputs.
 
 ## 7. Worker, caches, and real progress
 
@@ -302,7 +303,7 @@ The kernel and FFT plan are the only material initial costs; both run off the ma
 
 `npm run test:e2e` launches Chromium, observes intermediate real worker percentages, verifies that the worker returned all 22 adaptive elevations, confirms the four physical components reach 100%, confirms neither zoom nor idle time triggers a second solve, changes to the Humid atmosphere preset, verifies that requested recomputation, and fails on page or console errors.
 
-`npm run test:appearance` checks the Realistic sky-response anchors, magnitude law, integral-normalized PSF, stellar chroma, sprite size, atmosphere-dependent dispersion, and visual-limit calibration. The appearance E2E case verifies accessible keyboard selection, persistence, consistent presentation metrics, and that a mode switch leaves the completed physical field untouched.
+`npm run test:appearance` checks the Realistic sky-response anchors, bounded 1.6× stellar display lift, shared Atlas/Realistic visibility support, magnitude law, integral-normalized PSF, stellar chroma, sprite size, and atmosphere-dependent dispersion. The appearance E2E case verifies accessible keyboard selection and persistence, requires the complete summary and solver result to remain identical across modes, and confirms that the canvas presentation still changes.
 
 ## 9. Limitations
 
