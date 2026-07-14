@@ -38,17 +38,20 @@ const emissionCache = new Map<string, PhysicalGlowEmissionGrid>()
 const kernelCache = new Map<string, AtmosphericKernel>()
 const planCache = new Map<string, RingConvolutionPlan>()
 const MAX_EMISSION_CACHE_ENTRIES = 3
-const MAX_KERNEL_CACHE_ENTRIES = 4
+// Keep every shipped weather preset warm. Kernels are compact; the much larger
+// positive FFT plan remains separately limited to the single active atmosphere.
+const MAX_KERNEL_CACHE_ENTRIES = 8
 // A full positive FFT plan is intentionally larger than the old truncated
 // harmonic plan; retain only the active atmosphere to bound worker memory.
 const MAX_PLAN_CACHE_ENTRIES = 1
 const cancelled = new Set<number>()
+const activeAnalyzeRequests = new Set<number>()
 let latestAnalyzeRequest = 0
 
 scope.onmessage = (event) => {
   const request = event.data
   if (request.type === 'cancel') {
-    cancelled.add(request.requestId)
+    if (activeAnalyzeRequests.has(request.requestId)) cancelled.add(request.requestId)
     return
   }
   if (request.type === 'clear-cache') {
@@ -75,6 +78,7 @@ scope.onmessage = (event) => {
 }
 
 async function analyze(request: PhysicalGlowAnalyzeRequest) {
+  activeAnalyzeRequests.add(request.requestId)
   const totalStarted = performance.now()
   const weights = normalizeWeights(request.options?.progressWeights)
   const components: PhysicalGlowProgressBreakdown = {
@@ -195,7 +199,9 @@ async function analyze(request: PhysicalGlowAnalyzeRequest) {
       request,
       weights,
       components,
-      kernelResolution.cacheHit ? 'Cached atmosphere kernel ready' : 'Atmosphere kernel ready',
+      kernelResolution.mode === 'inline'
+        ? kernelResolution.cacheHit ? 'Cached preset kernel ready' : 'Precomputed preset kernel ready'
+        : kernelResolution.cacheHit ? 'Cached atmosphere kernel ready' : 'Atmosphere kernel ready',
       `${plan.sectorCount} bearing bins · ${plan.fftSize}-point FFT · ${kernelMs.toFixed(0)} ms`,
     )
     await delay(0)
@@ -311,6 +317,16 @@ async function analyze(request: PhysicalGlowAnalyzeRequest) {
     if (finishIfStale(request)) return
     const transfer = resultTransferables(result)
     scope.postMessage({ type: 'result', requestId: request.requestId, result }, transfer)
+    // Commit an inline field, or touch a cache hit's LRU position, only after a
+    // complete result is successfully posted. The hook advances its matching
+    // confirmed-key order on that same result, so cancelled work can neither
+    // evict an entry nor silently reorder the worker relative to the hook.
+    lruSet(
+      emissionCache,
+      request.emission.cacheKey,
+      emission,
+      MAX_EMISSION_CACHE_ENTRIES,
+    )
   } catch (error) {
     if (finishIfStale(request)) return
     scope.postMessage({
@@ -321,22 +337,17 @@ async function analyze(request: PhysicalGlowAnalyzeRequest) {
     })
   } finally {
     cancelled.delete(request.requestId)
+    activeAnalyzeRequests.delete(request.requestId)
   }
 }
 
 function resolveEmission(request: PhysicalGlowAnalyzeRequest) {
   if (request.emission.kind === 'cache') {
-    const cached = lruGet(emissionCache, request.emission.cacheKey)
+    const cached = emissionCache.get(request.emission.cacheKey)
     if (!cached) throw new Error(`Emission cache miss for ${request.emission.cacheKey}`)
     return cached
   }
   validateEmission(request.emission.grid)
-  lruSet(
-    emissionCache,
-    request.emission.cacheKey,
-    request.emission.grid,
-    MAX_EMISSION_CACHE_ENTRIES,
-  )
   return request.emission.grid
 }
 

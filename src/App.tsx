@@ -22,27 +22,13 @@ import { usePhysicalGlow, type PhysicalGlowAnalysisState } from './hooks/usePhys
 import { getSolarSystem } from './lib/astronomy'
 import { calculatePhysicalSkyMetrics } from './lib/physicalGlowField'
 import { clamp } from './lib/skyModel'
+import { DEFAULT_ATMOSPHERE } from './lib/weatherPresets'
 import type { AppearanceMode, Atmosphere, Location } from './types'
 
 const INITIAL_LOCATION: Location = {
   lat: 52.2297,
   lon: 21.0122,
   label: 'Warsaw, Poland',
-}
-
-const INITIAL_ATMOSPHERE: Atmosphere = {
-  aerosol: 0.12,
-  humidity: 0.45,
-  cloud: 0.08,
-  cloudBase: 6.5,
-  angstromExponent: 1.3,
-  aerosolScaleHeightKm: 1.4,
-  aerosolSingleScatteringAlbedo: 0.92,
-  aerosolAsymmetry: 0.68,
-  cloudThicknessKm: 1.8,
-  cloudOpticalDepth: 8,
-  groundAlbedo: 0.14,
-  maxScatteringOrder: 3,
 }
 
 const APPEARANCE_STORAGE_KEY = 'night-glow:appearance-mode'
@@ -54,7 +40,7 @@ function storedAppearanceMode(): AppearanceMode {
 
 export default function App() {
   const [location, setLocation] = useState(INITIAL_LOCATION)
-  const [atmosphere, setAtmosphere] = useState(INITIAL_ATMOSPHERE)
+  const [atmosphere, setAtmosphere] = useState<Atmosphere>(() => ({ ...DEFAULT_ATMOSPHERE }))
   const [appearanceMode, setAppearanceMode] = useState<AppearanceMode>(storedAppearanceMode)
   const [date, setDate] = useState(() => new Date())
   const [mapOpen, setMapOpen] = useState(false)
@@ -87,6 +73,7 @@ export default function App() {
     () => calculatePhysicalSkyMetrics(physicalGlow.result, date, location, atmosphere, sun?.altitude, moonLight),
     [physicalGlow.result, date, location, atmosphere, sun?.altitude, moonLight],
   )
+  const skyState = solarSkyState(sun?.altitude)
   const nudgeTime = (hours: number) => setDate((current) => new Date(current.getTime() + hours * 3_600_000))
   const direction = compassDirection(view.azimuth)
   const setMapPin = (pinned: boolean) => {
@@ -134,7 +121,10 @@ export default function App() {
         </div>
 
         <div className="sky-summary" aria-label="Sky visibility summary">
-          <SummaryMetric label="Bortle" value={`Class ${metrics.bortle}`} />
+          <SummaryMetric
+            label={skyState ? 'Sky state' : 'Bortle'}
+            value={skyState ?? `Class ${metrics.bortle}`}
+          />
           <SummaryMetric label="Sky quality" value={`${metrics.zenithMag.toFixed(2)} mag`} />
           <SummaryMetric label="Naked-eye limit" value={`+${metrics.limitingMagnitude.toFixed(1)}`} />
           <SummaryMetric label="Visible stars" value={`~${metrics.visibleStars.toLocaleString()}`} />
@@ -203,6 +193,7 @@ export default function App() {
           />
           <SettingsPanel
             atmosphere={atmosphere}
+            analysis={physicalGlow}
             appearanceMode={appearanceMode}
             onAppearanceModeChange={setAppearanceMode}
             onChange={setAtmosphere}
@@ -267,7 +258,10 @@ function SideDrawer({ side, label, tabIcon, panelClass, panelLabel, pinned, open
     <section
       className={`side-drawer ${side} ${expanded ? 'is-open' : ''} ${pinned ? 'is-pinned' : ''}`}
       onMouseEnter={() => onOpenChange(true)}
-      onMouseLeave={() => { if (!pinned) onOpenChange(false) }}
+      onMouseLeave={(event) => {
+        const focused = event.currentTarget.ownerDocument.activeElement
+        if (!pinned && !event.currentTarget.contains(focused)) onOpenChange(false)
+      }}
       onFocusCapture={() => onOpenChange(true)}
       onBlurCapture={(event) => {
         if (!pinned && !event.currentTarget.contains(event.relatedTarget as Node | null)) onOpenChange(false)
@@ -463,4 +457,12 @@ function toLocalInput(date: Date) {
 function compassDirection(degrees: number) {
   const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
   return directions[Math.round(degrees / 45) % 8]
+}
+
+function solarSkyState(solarAltitude: number | undefined) {
+  if (solarAltitude == null || solarAltitude <= -18) return undefined
+  if (solarAltitude <= -12) return 'Astronomical twilight'
+  if (solarAltitude <= -6) return 'Nautical twilight'
+  if (solarAltitude <= 0) return 'Civil twilight'
+  return 'Daylight'
 }

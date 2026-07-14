@@ -393,7 +393,6 @@ export default function SkyCanvas({
       onPointerUp={() => { draggingRef.current = null }}
       onPointerCancel={() => { draggingRef.current = null }}
       onWheel={(event) => {
-        event.preventDefault()
         fovRef.current = clamp(fovRef.current + event.deltaY * 0.025, 24, 82)
         const camera = sceneRef.current?.camera
         if (camera) {

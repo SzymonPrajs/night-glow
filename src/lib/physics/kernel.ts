@@ -18,6 +18,15 @@ import type {
   SpectralBand,
 } from './types'
 
+/**
+ * Cache/asset ABI for the numerical transfer model.
+ *
+ * Increment this whenever kernel-producing maths changes, even if the
+ * atmosphere, grid, options, and bands have not. Serialized-kernel schema
+ * versioning is separate from this numerical-model revision.
+ */
+export const ATMOSPHERIC_KERNEL_MODEL_REVISION = 2
+
 export function buildAtmosphericKernel(
   atmosphereInput: AtmosphereInput = {},
   gridInput: KernelGridSpec = DEFAULT_KERNEL_GRID,
@@ -159,8 +168,14 @@ export function atmosphericKernelCacheKey(
   const grid = normalizeKernelGrid(gridInput)
   const options = normalizeRadiativeTransferOptions(optionsInput)
   const bands = normalizeBands(bandsInput)
-  const description = JSON.stringify({ version: 1, atmosphere, grid, options, bands })
-  return `atmosphere-v1-${fnv1a(description)}`
+  const description = JSON.stringify({
+    modelRevision: ATMOSPHERIC_KERNEL_MODEL_REVISION,
+    atmosphere,
+    grid,
+    options,
+    bands,
+  })
+  return `atmosphere-v${ATMOSPHERIC_KERNEL_MODEL_REVISION}-${fnv1a(description)}`
 }
 
 /** Trilinear lookup. Relative azimuth is folded to [0, 180] by symmetry. */

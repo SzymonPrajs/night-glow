@@ -12,10 +12,12 @@ import type {
   PhysicalGlowResult,
   PhysicalGlowWorkerMessage,
 } from '../lib/physicalGlowProtocol'
+import { loadPrecomputedWeatherKernel } from '../lib/precomputedWeatherKernels'
 import { DEFAULT_SKY_ELEVATIONS_DEG } from '../lib/physics'
 import type { Atmosphere, Location } from '../types'
 
 const REGIONAL_SOURCES = createRegionalSettlementSources()
+const MAX_EMISSION_CACHE_ENTRIES = 3
 
 const EMPTY_COMPONENTS: PhysicalGlowProgressBreakdown = {
   emission: 0,
@@ -60,12 +62,19 @@ export function usePhysicalGlow(
   const requestIdRef = useRef(0)
   const activeRequestRef = useRef<number | null>(null)
   const confirmedEmissionKeysRef = useRef(new Set<string>())
+  const emissionMetadataRef = useRef(new Map<string, {
+    buildMs: number
+    diagnostics: EmissionDiagnostics
+    ringCount: number
+    sectorCount: number
+  }>())
   const activeEmissionRef = useRef<{ requestId: number; cacheKey: string } | null>(null)
 
   useEffect(() => {
     const worker = new Worker(new URL('../workers/physicalGlow.worker.ts', import.meta.url), { type: 'module' })
     workerRef.current = worker
     confirmedEmissionKeysRef.current = new Set()
+    emissionMetadataRef.current = new Map()
     activeEmissionRef.current = null
     worker.onmessage = (event: MessageEvent<PhysicalGlowWorkerMessage>) => {
       const message = event.data
@@ -89,18 +98,31 @@ export function usePhysicalGlow(
       } else if (message.type === 'result') {
         const activeEmission = activeEmissionRef.current
         if (activeEmission?.requestId === message.requestId) {
-          confirmedEmissionKeysRef.current.add(activeEmission.cacheKey)
+          const confirmed = confirmedEmissionKeysRef.current
+          confirmed.delete(activeEmission.cacheKey)
+          confirmed.add(activeEmission.cacheKey)
+          while (confirmed.size > MAX_EMISSION_CACHE_ENTRIES) {
+            const oldest = confirmed.values().next().value as string | undefined
+            if (!oldest) break
+            confirmed.delete(oldest)
+            emissionMetadataRef.current.delete(oldest)
+          }
         }
+        const kernelStatus = message.result.diagnostics.kernelMode === 'inline'
+          ? message.result.diagnostics.kernelCacheHit ? 'cached preset' : 'precomputed preset'
+          : message.result.diagnostics.kernelCacheHit ? 'cached' : 'new'
         setState((current) => ({
           ...current,
           status: 'live',
           progress: 100,
           stage: 'Physical sky field ready',
-          detail: `${message.result.timings.totalMs.toFixed(0)} ms · ${message.result.diagnostics.kernelCacheHit ? 'cached' : 'new'} kernel · ${message.result.diagnostics.nonFiniteCount + message.result.diagnostics.negativeCount} invalid`,
+          detail: `${message.result.timings.totalMs.toFixed(0)} ms · ${kernelStatus} kernel · ${message.result.diagnostics.nonFiniteCount + message.result.diagnostics.negativeCount} invalid`,
           components: { emission: 1, kernel: 1, propagation: 1, diagnostics: 1 },
           result: message.result,
           error: undefined,
         }))
+        activeRequestRef.current = null
+        activeEmissionRef.current = null
       } else if (message.type === 'error') {
         setState((current) => ({
           ...current,
@@ -108,6 +130,11 @@ export function usePhysicalGlow(
           stage: 'Physical analysis failed',
           error: message.message,
         }))
+        activeRequestRef.current = null
+        activeEmissionRef.current = null
+      } else if (message.type === 'cancelled') {
+        activeRequestRef.current = null
+        activeEmissionRef.current = null
       }
     }
     worker.onerror = (event) => {
@@ -130,35 +157,64 @@ export function usePhysicalGlow(
     const worker = workerRef.current
     if (!worker) return
     const requestId = ++requestIdRef.current
-    const timer = window.setTimeout(() => {
+    const abortController = new AbortController()
+    const timer = window.setTimeout(async () => {
       const previousRequest = activeRequestRef.current
       if (previousRequest != null) worker.postMessage({ type: 'cancel', requestId: previousRequest })
       activeRequestRef.current = requestId
+      const emissionCacheKey = makeEmissionCacheKey(location)
+      const cached = confirmedEmissionKeysRef.current.has(emissionCacheKey)
       setState((current) => ({
         ...current,
         status: 'loading',
-        progress: 2,
-        stage: 'Integrating regional source footprints',
-        detail: `Integrating ${REGIONAL_SOURCES.length.toLocaleString()} bundled settlement footprints`,
-        components: { emission: 0.08, kernel: 0, propagation: 0, diagnostics: 0 },
+        progress: cached ? 8 : 2,
+        stage: cached ? 'Reusing regional source footprints' : 'Integrating regional source footprints',
+        detail: cached
+          ? 'The observer is unchanged; reusing its confirmed directional source grid'
+          : `Integrating ${REGIONAL_SOURCES.length.toLocaleString()} bundled settlement footprints`,
+        components: { emission: cached ? 1 : 0.08, kernel: 0, propagation: 0, diagnostics: 0 },
         error: undefined,
       }))
 
       try {
-        const started = performance.now()
-        const emission = buildEmissionGrid({
-          observer: location,
-          sources: REGIONAL_SOURCES,
-          sampleSpacingKm: 0.5,
-          maxSamplesPerSource: 4096,
-        })
-        const emissionBuildMs = performance.now() - started
-        const emissionCacheKey = makeEmissionCacheKey(location)
         // A posted inline request may be cancelled during its debounce before
         // the worker has installed the field. Only a completed result confirms
         // that a cache-only follow-up is safe.
-        const cached = confirmedEmissionKeysRef.current.has(emissionCacheKey)
-        const protocolGrid = cached ? undefined : toProtocolGrid(emission)
+        let metadata = emissionMetadataRef.current.get(emissionCacheKey)
+        let protocolGrid: PhysicalGlowEmissionGrid | undefined
+        if (!cached) {
+          const started = performance.now()
+          const emission = buildEmissionGrid({
+            observer: location,
+            sources: REGIONAL_SOURCES,
+            sampleSpacingKm: 0.5,
+            maxSamplesPerSource: 4096,
+          })
+          metadata = {
+            buildMs: performance.now() - started,
+            diagnostics: emission.diagnostics,
+            ringCount: emission.rings.length,
+            sectorCount: emission.sectorCount,
+          }
+          emissionMetadataRef.current.set(emissionCacheKey, metadata)
+          protocolGrid = toProtocolGrid(emission)
+        }
+        if (!metadata) throw new Error('Confirmed source grid is missing its diagnostics')
+        let precomputedKernel: Awaited<ReturnType<typeof loadPrecomputedWeatherKernel>> = null
+        try {
+          precomputedKernel = await loadPrecomputedWeatherKernel(
+            atmosphere,
+            abortController.signal,
+          )
+        } catch (error) {
+          if (abortController.signal.aborted) return
+          setState((current) => ({
+            ...current,
+            stage: 'Computing atmosphere kernel',
+            detail: `Preset cache unavailable; using the live solver (${error instanceof Error ? error.message : 'load failed'})`,
+          }))
+        }
+        if (activeRequestRef.current !== requestId) return
         const request: PhysicalGlowAnalyzeRequest = {
           type: 'analyze',
           requestId,
@@ -167,7 +223,9 @@ export function usePhysicalGlow(
           emission: cached
             ? { kind: 'cache', cacheKey: emissionCacheKey }
             : { kind: 'inline', cacheKey: emissionCacheKey, grid: protocolGrid! },
-          kernel: { kind: 'auto', elevationDeg: Float32Array.from(DEFAULT_SKY_ELEVATIONS_DEG) },
+          kernel: precomputedKernel
+            ? { kind: 'inline', ...precomputedKernel }
+            : { kind: 'auto', elevationDeg: Float32Array.from(DEFAULT_SKY_ELEVATIONS_DEG) },
           options: {
             debounceMs: 80,
             progressWeights: DEFAULT_WEIGHTS,
@@ -178,16 +236,20 @@ export function usePhysicalGlow(
           },
         }
         const transfer = protocolGrid ? transferableBuffers(protocolGrid) : []
+        if (precomputedKernel) transfer.push(...transferableKernelBuffers(precomputedKernel.kernel))
         activeEmissionRef.current = { requestId, cacheKey: emissionCacheKey }
         worker.postMessage(request, transfer)
         setState((current) => ({
           ...current,
-          emissionBuildMs,
-          emissionDiagnostics: emission.diagnostics,
-          components: { ...current.components, emission: 0.92 },
-          detail: `${emission.rings.length} rings × ${emission.sectorCount} bearings · ${emissionBuildMs.toFixed(0)} ms source integration`,
+          emissionBuildMs: cached ? 0 : metadata.buildMs,
+          emissionDiagnostics: metadata.diagnostics,
+          components: { ...current.components, emission: cached ? 1 : 0.92 },
+          detail: cached
+            ? `${metadata.ringCount} rings × ${metadata.sectorCount} bearings · cached source grid`
+            : `${metadata.ringCount} rings × ${metadata.sectorCount} bearings · ${metadata.buildMs.toFixed(0)} ms source integration`,
         }))
       } catch (error) {
+        if (abortController.signal.aborted || activeRequestRef.current !== requestId) return
         setState((current) => ({
           ...current,
           status: 'error',
@@ -199,6 +261,7 @@ export function usePhysicalGlow(
 
     return () => {
       window.clearTimeout(timer)
+      abortController.abort()
       if (activeRequestRef.current === requestId) worker.postMessage({ type: 'cancel', requestId })
     }
   }, [location, atmosphere])
@@ -248,6 +311,18 @@ function transferableBuffers(grid: PhysicalGlowEmissionGrid) {
   if (grid.confidence) buffers.push(grid.confidence.buffer)
   for (const component of grid.components ?? []) buffers.push(component.ringSpectralFlux.buffer)
   return buffers
+}
+
+function transferableKernelBuffers(kernel: NonNullable<
+  Awaited<ReturnType<typeof loadPrecomputedWeatherKernel>>
+>['kernel']) {
+  return [
+    kernel.distanceKm.buffer,
+    kernel.relativeAzimuthDeg.buffer,
+    kernel.elevationDeg.buffer,
+    kernel.wavelengthsNm.buffer,
+    kernel.values.buffer,
+  ] as Transferable[]
 }
 
 function makeEmissionCacheKey(location: Location) {

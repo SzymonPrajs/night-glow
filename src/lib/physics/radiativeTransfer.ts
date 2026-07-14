@@ -28,6 +28,7 @@ import {
 } from './geometry'
 import type {
   AtmosphereInput,
+  CloudLayer,
   RadiativeTransferInput,
   RadiativeTransferOptions,
   SpectralBand,
@@ -192,6 +193,7 @@ export function computePreparedUnitSourceSpectrum(
     atmosphere.state.groundAlbedo *
     atmosphere.state.cloud.coverage *
     (1 - Math.exp(-atmosphere.state.cloud.opticalDepth)) * 0.35
+  const lowCloudReturn = lowCloudUrbanReturnEnhancement(atmosphere.state.cloud)
 
   for (let bandIndex = 0; bandIndex < bandCount; bandIndex += 1) {
     const firstOrder = nonNegativeFinite(singleScattering[bandIndex])
@@ -206,11 +208,37 @@ export function computePreparedUnitSourceSpectrum(
     )
     continuationRatios[bandIndex] = continuation
     const multiple = sumConvergentScatteringSeries(firstOrder, continuation, options.multipleScattering)
-    radiance[bandIndex] = nonNegativeFinite(multiple.total)
+    radiance[bandIndex] = nonNegativeFinite(multiple.total * lowCloudReturn)
     ordersUsed[bandIndex] = multiple.ordersUsed
   }
 
   return { radiance, singleScattering, continuationRatios, ordersUsed }
+}
+
+/**
+ * Bounded unresolved return of artificial urban light from a low cloud deck.
+ *
+ * The resolved path integral already includes cloud scattering, but its unit
+ * source geometry omits part of the broad city-to-deck-to-ground return seen
+ * over polluted cities. This empirical closure multiplies only the final
+ * artificial-light radiance: it does not alter direct celestial transmission,
+ * natural sky radiance, first-order diagnostics, or clear-air calibration.
+ * Coverage and optical depth increase the return monotonically; cloud height
+ * suppresses it exponentially. Normalized inputs guarantee 1 <= factor <= 1.8.
+ */
+export function lowCloudUrbanReturnEnhancement(
+  cloud: Pick<CloudLayer, 'coverage' | 'opticalDepth' | 'baseAltitudeKm'>,
+) {
+  const coverage = clamp(Number.isFinite(cloud.coverage) ? cloud.coverage : 0, 0, 1)
+  const opticalDepth = Math.max(0, Number.isFinite(cloud.opticalDepth) ? cloud.opticalDepth : 0)
+  const baseAltitudeKm = Number.isFinite(cloud.baseAltitudeKm)
+    ? Math.max(0, cloud.baseAltitudeKm)
+    : Number.POSITIVE_INFINITY
+  return clamp(
+    1 + 0.8 * coverage * (1 - Math.exp(-opticalDepth / 3)) * Math.exp(-baseAltitudeKm / 2),
+    1,
+    1.8,
+  )
 }
 
 /**
