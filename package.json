@@ -9,6 +9,7 @@
     "catalog:stars": "node scripts/download-star-catalog.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
+    "test:appearance": "tsx scripts/verify-realistic-appearance.ts",
     "test:physics": "tsx scripts/verify-physical-model.ts",
     "test:e2e": "playwright test"
   },
