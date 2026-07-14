@@ -241,7 +241,41 @@ m_{\rm dark}-1.18\log_{10}\left(1+\frac{Y_{\rm art}}{Y_{\rm natural}}\right),
 
 The renderer bilinearly interpolates the periodic bearing grid and irregular elevation grid. This local limit controls each catalogue star, bright-star label, cluster, nebula, galaxy, planet, and Milky Way sample. The 8,404-star catalogue reaches visual magnitude 6.5; magnitude, B−V colour, spectral type, atmospheric extinction, PSF width, halo, and chromatic dispersion determine each stellar point. Moonlight and astronomical twilight apply an additional global penalty, while the directional artificial-light field remains spatially resolved.
 
-The glow itself is a 720-by-11 vertex-colour mesh on the sky dome. A monotonic exposure mapping converts relative radiance to display intensity without replacing the underlying field used for visibility decisions.
+The glow itself is a 720-bearing vertex-colour mesh on the sky dome. The 11 solved elevations are linearly densified to 126 render rows to suppress triangle seams without inventing new physical samples. A monotonic exposure mapping converts relative radiance to display intensity without replacing the underlying field used for visibility decisions.
+
+### 6.1 Atlas and Realistic presentation
+
+The solver field is independent of the selected presentation. **Atlas** retains the enhanced object colours, broad stellar sprites, and high-exposure glow useful for finding objects. **Realistic** is the default human-view approximation. Changing between them rebuilds only GPU geometry/materials and never starts a worker request.
+
+Realistic mode combines natural sky, astronomical twilight, moonlight, and artificial radiance before applying one relative eye/display response. With total luminance (Y) and the natural reference (Y_0=0.0020016), the linear SDR target is
+
+\[
+Y_{\rm display}=\min\left[0.03,\;0.0015\left(\frac{Y}{Y_0}\right)^{0.42}\right].
+\]
+
+The 0.42 exponent represents dark-to-mesopic adaptation on an uncalibrated monitor; it is not an absolute display calibration. Astronomical twilight begins at a solar altitude of (-18^\circ). Its global reference term is (180tY_0), where (t=\operatorname{clamp}[(h_\odot+18)/18,0,1]). The lunar term is (8MY_0), where (M) is illuminated fraction multiplied by the positive sine of lunar altitude. The physical mesh adds the exact display-domain difference
+
+\[
+T(Y_{\rm base}+Y_{\rm artificial})-T(Y_{\rm base}),
+\]
+
+so pollution is not tone-mapped once in the mesh and counted again in the procedural dome. The eight spectral bands are projected through sampled CIE 1931 colour-matching functions for hue, gamut-limited, and rescaled to the worker luminance so Atlas metrics and Realistic presentation share the same relative-radiance calibration. Low-light colour is then strongly desaturated; the mesopic weight is evaluated after converting the natural-sky ratio to an approximate cd/m² scale.
+
+Realistic stellar signal follows the magnitude law directly:
+
+\[
+F_\star=0.35\,10^{-0.4m_{\rm apparent}}V,
+\]
+
+where (V) is a smooth half-magnitude detection fade. The Gaussian core plus atmospheric halo is integral-normalized, so broader seeing redistributes this signal without creating energy. Consequently a magnitude-zero star carries exactly 100 times the integrated signal of a magnitude-five star before clipping. The sampled core FWHM is approximately 0.9–1.3 CSS pixels. Atmospheric dispersion is calculated in arcseconds from (1.2\cot(h)), converted using the live canvas height and vertical field of view, and capped at 0.35 pixel. Stellar colour keeps spectral ordering but its chroma falls from at most about 0.34 for the very brightest objects to 0.04 by magnitude three.
+
+For consistency, the Realistic summary and catalogue count use the same conservative visual threshold as the renderer:
+
+\[
+m_{\rm realistic}=\min\left[m_{\rm physical},\;7.15-0.8(21.92-\mathrm{SQM})\right].
+\]
+
+This empirical presentation threshold does not feed back into atmospheric transport. It prevents an urban Realistic view from hiding faint stars while still claiming an Atlas-style sixth-magnitude limit.
 
 ## 7. Worker, caches, and real progress
 
@@ -288,6 +322,8 @@ The kernel is the only material initial cost and is both off-main-thread and cac
 - The asynchronous kernel builder demonstrably stops after a superseding cancellation check.
 
 `npm run test:e2e` launches Chromium, observes intermediate real worker percentages, waits for every physical component to reach 100%, changes to the Humid atmosphere preset, verifies a second solve, and fails on page or console errors.
+
+`npm run test:appearance` checks the Realistic sky-response anchors, magnitude law, integral-normalized PSF, stellar chroma, sprite size, atmosphere-dependent dispersion, and visual-limit calibration. The appearance E2E case verifies accessible keyboard selection, persistence, consistent presentation metrics, and that a mode switch leaves the completed physical field untouched.
 
 ## 9. Limitations
 

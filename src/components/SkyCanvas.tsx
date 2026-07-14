@@ -8,8 +8,8 @@ import { physicalZenithSample, samplePhysicalGlow } from '../lib/physicalGlowFie
 import type { PhysicalGlowResult } from '../lib/physicalGlowProtocol'
 import { buildPhysicalGlowRenderGrid } from '../lib/physicalGlowRender'
 import { clamp } from '../lib/skyModel'
-import { starAppearance } from '../lib/starAppearance'
-import { createLabelTexture, createOrbTexture, MILKY_WAY_POINTS } from '../lib/starField'
+import { apparentStarMagnitude, starAppearance } from '../lib/starAppearance'
+import { createLabelTexture, createMoonTexture, createOrbTexture, MILKY_WAY_POINTS } from '../lib/starField'
 import type { AppearanceMode, Atmosphere, Location, SkyMetrics } from '../types'
 
 type ViewState = { azimuth: number; altitude: number; fov: number }
@@ -18,6 +18,7 @@ type SkyCanvasProps = {
   location: Location
   atmosphere: Atmosphere
   appearanceMode: AppearanceMode
+  moonLight: number
   glowField?: PhysicalGlowResult
   metrics: SkyMetrics
   date: Date
@@ -51,16 +52,21 @@ const realisticSkyResponseShader = `
     float physicalY = max(visualLuminance(radiance), 0.0000001);
     float displayY = min(0.03, 0.0015 * pow(max(physicalY / NATURAL_SKY_Y, 0.000001), 0.42));
     vec3 scaled = max(radiance, vec3(0.0)) * (displayY / physicalY);
-    float mesopic = smoothstep(0.005, 0.5, physicalY);
+    float luminanceCd = 0.0001842 * physicalY / NATURAL_SKY_Y;
+    float logLuminanceCd = log(max(luminanceCd, 0.000001)) / 2.302585;
+    float mesopic = smoothstep(-2.30103, -0.30103, logLuminanceCd);
     float chroma = mix(0.12, 0.40, mesopic);
     return linearToSrgb(max(mix(vec3(displayY), scaled, chroma), vec3(0.0)));
   }
-  vec3 realisticBaseRadiance(float horizon, float sunAltitude) {
+  vec3 realisticBaseRadiance(float horizon, float sunAltitude, float moonLight) {
     vec3 base = NATURAL_SKY * (1.0 + horizon * 0.45);
     float twilight = clamp((sunAltitude + 18.0) / 18.0, 0.0, 1.0);
     vec3 twilightColor = vec3(0.78, 0.88, 1.0);
     twilightColor *= NATURAL_SKY_Y / visualLuminance(twilightColor);
     base += twilightColor * (180.0 * twilight) * (1.0 + horizon * 1.6);
+    vec3 moonColor = vec3(0.82, 0.89, 1.0);
+    moonColor *= NATURAL_SKY_Y / visualLuminance(moonColor);
+    base += moonColor * (8.0 * moonLight) * (1.0 + horizon * 0.5);
     return base;
   }
 `
@@ -119,13 +125,16 @@ const starVertexShader = `
   varying float vHaloStrength;
   varying float vDispersion;
   uniform float uPixelRatio;
+  uniform float uRealistic;
+  uniform float uPixelsPerArcsecond;
   void main() {
     vColor = color;
     vOpacity = aOpacity;
     vCoreWidth = aCoreWidth;
     vHaloWidth = aHaloWidth;
     vHaloStrength = aHaloStrength;
-    vDispersion = aDispersion;
+    float realisticDispersion = min(aDispersion * uPixelsPerArcsecond, 0.7 / max(aSize, 1.0));
+    vDispersion = mix(aDispersion, realisticDispersion, uRealistic);
     vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
     gl_Position = projectionMatrix * mvPosition;
     gl_PointSize = max(1.0, aSize * uPixelRatio);
@@ -152,6 +161,12 @@ const starFragmentShader = `
     float halo = gaussian(length(point), vHaloWidth) * vHaloStrength;
     vec3 profile = vColor * (vec3(redCore, greenCore, blueCore) + halo);
     float intensity = max(profile.r, max(profile.g, profile.b));
+    if (uRealistic > 0.5) {
+      vec3 signal = profile * vOpacity;
+      if (max(signal.r, max(signal.g, signal.b)) < 0.00025) discard;
+      gl_FragColor = vec4(signal, 1.0);
+      return;
+    }
     if (intensity < .002 || vOpacity <= 0.0) discard;
     vec3 normalizedColor = profile / max(intensity, .001);
     vec3 displayColor = mix(normalizedColor, linearToSrgb(max(normalizedColor, vec3(0.0))), uRealistic);
@@ -163,6 +178,7 @@ export default function SkyCanvas({
   location,
   atmosphere,
   appearanceMode,
+  moonLight,
   glowField,
   metrics,
   date,
@@ -195,6 +211,7 @@ export default function SkyCanvas({
     const skyMaterial = new THREE.ShaderMaterial({
       side: THREE.BackSide,
       depthWrite: false,
+      toneMapped: false,
       uniforms: {
         uPollution: { value: 0.25 },
         uCloud: { value: 0.1 },
@@ -203,6 +220,7 @@ export default function SkyCanvas({
         uZenithMag: { value: 21.92 },
         uRealistic: { value: 1 },
         uHasPhysicalGlow: { value: 0 },
+        uMoonLight: { value: 0 },
       },
       vertexShader: `
         varying vec3 vDirection;
@@ -220,6 +238,7 @@ export default function SkyCanvas({
         uniform float uZenithMag;
         uniform float uRealistic;
         uniform float uHasPhysicalGlow;
+        uniform float uMoonLight;
         ${realisticSkyResponseShader}
         void main() {
           float y = clamp(vDirection.y, -0.05, 1.0);
@@ -236,11 +255,11 @@ export default function SkyCanvas({
           float clouds = smoothstep(.18 - uHumidity * .25, .78, n * .5 + .5) * uCloud;
           vec3 cloudColor = mix(vec3(.1, .11, .15), vec3(.43, .23, .12), uPollution * horizon);
           color = mix(color, cloudColor, clouds * (.22 + horizon * .38));
-          vec3 realisticBase = realisticBaseRadiance(horizon, uSunAltitude);
+          vec3 realisticBase = realisticBaseRadiance(horizon, uSunAltitude, uMoonLight);
           if (uHasPhysicalGlow < 0.5) {
             float ratio = max(0.0, pow(10.0, 0.4 * (21.92 - uZenithMag)) - 1.0);
             float twilightRatio = 180.0 * clamp((uSunAltitude + 18.0) / 18.0, 0.0, 1.0);
-            float fallbackRatio = max(0.0, ratio - twilightRatio);
+            float fallbackRatio = max(0.0, ratio - twilightRatio - 8.0 * uMoonLight);
             vec3 fallbackColor = vec3(1.0, 0.78, 0.56);
             fallbackColor *= NATURAL_SKY_Y / visualLuminance(fallbackColor);
             realisticBase += fallbackColor * fallbackRatio * (0.35 + horizon * 0.65);
@@ -278,6 +297,8 @@ export default function SkyCanvas({
       renderer.setSize(rect.width, rect.height, false)
       camera.aspect = rect.width / Math.max(1, rect.height)
       camera.updateProjectionMatrix()
+      const refs = sceneRef.current
+      if (refs) updateStarDispersionScale(refs)
     }
     const observer = new ResizeObserver(resize)
     observer.observe(canvas)
@@ -313,13 +334,16 @@ export default function SkyCanvas({
     refs.skyMaterial.uniforms.uZenithMag.value = metrics.zenithMag
     refs.skyMaterial.uniforms.uRealistic.value = appearanceMode === 'realistic' ? 1 : 0
     refs.skyMaterial.uniforms.uHasPhysicalGlow.value = glowField ? 1 : 0
+    refs.skyMaterial.uniforms.uMoonLight.value = moonLight
+    refs.renderer.toneMapping = appearanceMode === 'realistic' ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping
     refs.renderer.toneMappingExposure = APPEARANCE_PROFILES[appearanceMode].rendererExposure
     rebuildStars(refs, location, date, metrics, atmosphere, appearanceMode, glowField)
+    updateStarDispersionScale(refs)
     rebuildMilkyWay(refs, location, date, metrics, atmosphere, appearanceMode, glowField)
     rebuildDeepSky(refs, location, date, metrics, appearanceMode, glowField)
     rebuildSolarSystem(refs, solarSystem, metrics, appearanceMode, glowField)
-    rebuildPhysicalGlows(refs, glowField, appearanceMode, sun?.altitude ?? -30)
-  }, [location, date, metrics, atmosphere, solarSystem, glowField, appearanceMode])
+    rebuildPhysicalGlows(refs, glowField, appearanceMode, sun?.altitude ?? -30, moonLight)
+  }, [location, date, metrics, atmosphere, solarSystem, glowField, appearanceMode, moonLight])
 
   useEffect(() => {
     yawRef.current = 0
@@ -366,6 +390,8 @@ export default function SkyCanvas({
         if (camera) {
           camera.fov = fovRef.current
           camera.updateProjectionMatrix()
+          const refs = sceneRef.current
+          if (refs) updateStarDispersionScale(refs)
           updateView()
         }
       }}
@@ -433,7 +459,10 @@ function rebuildStars(
     const localLimit = glowField
       ? samplePhysicalGlow(glowField, horizontal.azimuth, horizontal.altitude).limitingMagnitude - globalLightPenalty
       : metrics.limitingMagnitude
-    if (star.mag >= localLimit) continue
+    const labelLimit = appearanceMode === 'realistic'
+      ? Math.min(localLimit, realisticVisualLimit(metrics.zenithMag))
+      : localLimit
+    if (apparentStarMagnitude(star, horizontal.altitude, atmosphere) >= labelLimit) continue
     const vector = horizontalVector(horizontal.azimuth, horizontal.altitude, 96)
     const label = makeLabel(
       `${star.name}  ·  ${star.constellation}`,
@@ -556,12 +585,14 @@ function rebuildSolarSystem(
       ? object.kind === 'sun' || object.kind === 'moon' ? 0.86 : clamp(0.5 - object.magnitude * 0.045, 0.27, 0.72)
       : atlasScale
     const color = appearanceMode === 'realistic' ? subduedColor(style.color) : style.color
-    const orb = makeOrb(
-      color,
-      appearanceMode === 'realistic' ? 'rgba(255, 255, 255, .09)' : style.halo,
-      scale,
-      APPEARANCE_PROFILES[appearanceMode].planetOpacity,
-    )
+    const orb = appearanceMode === 'realistic' && object.kind === 'moon'
+      ? makeMoonOrb(object.phase ?? 0, scale, APPEARANCE_PROFILES.realistic.planetOpacity)
+      : makeOrb(
+          color,
+          appearanceMode === 'realistic' ? 'rgba(255, 255, 255, .09)' : style.halo,
+          scale,
+          APPEARANCE_PROFILES[appearanceMode].planetOpacity,
+        )
     orb.position.set(vector.x, vector.y, vector.z)
     refs.planetGroup.add(orb)
     const label = makeLabel(
@@ -580,6 +611,7 @@ function rebuildPhysicalGlows(
   field: PhysicalGlowResult | undefined,
   appearanceMode: AppearanceMode,
   sunAltitude: number,
+  moonLight: number,
 ) {
   clearGroup(refs.glowGroup)
   if (!field?.rgbRadiance.length) return
@@ -627,12 +659,14 @@ function rebuildPhysicalGlows(
   const material = new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
+    toneMapped: false,
     side: THREE.DoubleSide,
     blending: THREE.AdditiveBlending,
     uniforms: {
       uExposure: { value: 32 },
       uRealistic: { value: appearanceMode === 'realistic' ? 1 : 0 },
       uSunAltitude: { value: sunAltitude },
+      uMoonLight: { value: moonLight },
     },
     vertexShader: `
       attribute vec3 aRadiance;
@@ -650,11 +684,12 @@ function rebuildPhysicalGlows(
       uniform float uExposure;
       uniform float uRealistic;
       uniform float uSunAltitude;
+      uniform float uMoonLight;
       ${realisticSkyResponseShader}
       void main() {
         vec3 mapped = vec3(1.0) - exp(-max(vRadiance, vec3(0.0)) * uExposure);
         float horizon = pow(1.0 - clamp(vAltitude, 0.0, 1.0), 3.2);
-        vec3 base = realisticBaseRadiance(horizon, uSunAltitude);
+        vec3 base = realisticBaseRadiance(horizon, uSunAltitude, uMoonLight);
         vec3 realisticDelta = max(realisticSkyTone(base + max(vRadiance, vec3(0.0))) - realisticSkyTone(base), vec3(0.0));
         vec4 atlasOutput = vec4(mapped, .82);
         vec4 realisticOutput = vec4(realisticDelta, 1.0);
@@ -679,6 +714,7 @@ function makePointMaterial(
     vertexColors: true,
     transparent: true,
     depthWrite: false,
+    toneMapped: false,
     blending,
     uniforms: {
       uPixelRatio: { value: Math.min(renderer.getPixelRatio(), 2) },
@@ -689,15 +725,28 @@ function makePointMaterial(
   })
 }
 
+function updateStarDispersionScale(refs: SceneRefs) {
+  const cssHeight = Math.max(1, refs.renderer.domElement.clientHeight)
+  const pixelsPerArcsecond = cssHeight / Math.max(1, refs.camera.fov * 3600)
+  refs.starGroup.traverse((object) => {
+    const material = (object as THREE.Points).material as THREE.ShaderMaterial | undefined
+    if (material?.uniforms?.uPixelsPerArcsecond) {
+      material.uniforms.uPixelsPerArcsecond.value = pixelsPerArcsecond
+    }
+  })
+}
+
 function makeStarMaterial(renderer: THREE.WebGLRenderer, appearanceMode: AppearanceMode) {
   return new THREE.ShaderMaterial({
     vertexColors: true,
     transparent: true,
     depthWrite: false,
+    toneMapped: false,
     blending: THREE.AdditiveBlending,
     uniforms: {
       uPixelRatio: { value: Math.min(renderer.getPixelRatio(), 2) },
       uRealistic: { value: appearanceMode === 'realistic' ? 1 : 0 },
+      uPixelsPerArcsecond: { value: 0.0036 },
     },
     vertexShader: starVertexShader,
     fragmentShader: starFragmentShader,
@@ -717,6 +766,18 @@ function makeOrb(color: string, halo: string, scale: number, opacity = 1) {
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
+    opacity,
+  }))
+  sprite.scale.set(scale, scale, 1)
+  return sprite
+}
+
+function makeMoonOrb(phase: number, scale: number, opacity: number) {
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: createMoonTexture(phase),
+    transparent: true,
+    depthWrite: false,
+    toneMapped: false,
     opacity,
   }))
   sprite.scale.set(scale, scale, 1)

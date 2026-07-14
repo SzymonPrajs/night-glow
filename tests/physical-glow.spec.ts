@@ -36,7 +36,7 @@ test('reports real solver progress and recomputes an atmosphere preset', async (
   await expect(page.getByText('8', { exact: true }).first()).toBeVisible()
   await expect(page.locator('canvas')).toBeVisible()
 
-  await page.getByRole('button', { name: 'Show Atmosphere settings' }).hover()
+  await page.getByRole('button', { name: 'Show Sky settings' }).hover()
   await page.getByRole('button', { name: 'Humid', exact: true }).click()
   await expect.poll(async () => Number(await progress.getAttribute('aria-valuenow') ?? 100)).toBeLessThan(90)
   const recomputeProgress: number[] = []

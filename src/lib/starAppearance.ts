@@ -91,7 +91,8 @@ function realisticStarAppearance(
   const sigmaHalo = clamp(0.78 + atmosphere.aerosol * 0.22 + atmosphere.humidity * 0.12, 0.78, 1.15)
   const size = clamp(2.85 + haloEnergy * 7 + Math.sqrt(extraColumn) * 0.045, 2.85, 4.2)
   const haloStrength = haloEnergy / (1 - haloEnergy) * (sigmaCore / sigmaHalo) ** 2
-  const dispersionPixels = realisticDispersionPixels(altitude)
+  const psfIntegral = 2 * Math.PI * sigmaCore ** 2 / (1 - haloEnergy)
+  const dispersionArcsec = realisticDispersionArcsec(altitude)
 
   return {
     color: observedStarColor(
@@ -103,15 +104,15 @@ function realisticStarAppearance(
       apparentMagnitude,
     ),
     size,
-    opacity: visibility * peakIntensity,
+    opacity: visibility * peakIntensity / psfIntegral,
     coreWidth: clamp((2 * sigmaCore) / size, 0.08, 0.42),
     haloWidth: clamp((2 * sigmaHalo) / size, 0.3, 0.75),
     haloStrength,
-    dispersion: (dispersionPixels * 2) / size,
+    dispersion: (dispersionArcsec * 2) / size,
   }
 }
 
-export function apparentStarMagnitude(star: CatalogStar, altitude: number, atmosphere: Atmosphere) {
+export function apparentStarMagnitude(star: Pick<CatalogStar, 'mag'>, altitude: number, atmosphere: Atmosphere) {
   const extraColumn = Math.max(0, relativeAirMass(altitude) - 1)
   const extinctionPerAirMass = 0.075 + atmosphere.aerosol * 0.24 + atmosphere.humidity * 0.1
   return star.mag + clamp(extraColumn * extinctionPerAirMass, 0, 3.5)
@@ -142,6 +143,8 @@ function observedStarColor(
     color.r = luminance + (color.r - luminance) * saturation
     color.g = luminance + (color.g - luminance) * saturation
     color.b = luminance + (color.b - luminance) * saturation
+    const observedLuminance = 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b
+    if (observedLuminance > 0) color.multiplyScalar(1 / observedLuminance)
     return color
   }
   const observedPeak = Math.max(color.r, color.g, color.b)
@@ -150,13 +153,16 @@ function observedStarColor(
 }
 
 export function realisticStarPeak(apparentMagnitude: number) {
-  return 1 - Math.exp(-0.6 * 10 ** (-0.4 * apparentMagnitude))
+  return 0.35 * 10 ** (-0.4 * apparentMagnitude)
 }
 
 export function realisticDispersionPixels(altitude: number) {
+  return clamp(realisticDispersionArcsec(altitude) * 0.0036, 0, 0.35)
+}
+
+export function realisticDispersionArcsec(altitude: number) {
   const safeAltitude = clamp(altitude, 0.5, 90)
-  const dispersionArcsec = 1.2 / Math.tan((safeAltitude * Math.PI) / 180)
-  return clamp(dispersionArcsec * 0.0036, 0, 0.35)
+  return Math.max(0, 1.2 / Math.tan((safeAltitude * Math.PI) / 180))
 }
 
 function smoothstep(minimum: number, maximum: number, value: number) {

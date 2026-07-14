@@ -45,6 +45,42 @@ export function createOrbTexture(color: string, halo: string) {
   return texture
 }
 
+/** A simple naked-eye lunar disc with an illuminated terminator. */
+export function createMoonTexture(phase: number) {
+  const canvas = document.createElement('canvas')
+  canvas.width = 128
+  canvas.height = 128
+  const context = canvas.getContext('2d')!
+  const image = context.createImageData(128, 128)
+  const illuminated = Math.max(0, Math.min(1, phase))
+  const terminator = 2 * illuminated - 1
+
+  for (let y = 0; y < 128; y += 1) {
+    for (let x = 0; x < 128; x += 1) {
+      const nx = (x + 0.5 - 64) / 49
+      const ny = (y + 0.5 - 64) / 49
+      const radiusSquared = nx * nx + ny * ny
+      if (radiusSquared > 1) continue
+      const limb = Math.sqrt(Math.max(0, 1 - ny * ny))
+      const lit = nx >= -terminator * limb
+      if (!lit) continue
+      const limbDarkening = 0.72 + 0.28 * Math.sqrt(Math.max(0, 1 - radiusSquared))
+      const offset = (y * 128 + x) * 4
+      image.data[offset] = Math.round(226 * limbDarkening)
+      image.data[offset + 1] = Math.round(233 * limbDarkening)
+      image.data[offset + 2] = Math.round(238 * limbDarkening)
+      image.data[offset + 3] = 255
+    }
+  }
+
+  context.putImageData(image, 0, 0)
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
+  texture.minFilter = THREE.LinearFilter
+  texture.generateMipmaps = false
+  return texture
+}
+
 function makeMilkyWay(count: number): MilkyWayPoint[] {
   const random = mulberry32(90125)
   return Array.from({ length: count }, () => {

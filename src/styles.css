@@ -270,7 +270,7 @@ button { color: inherit; }
 .appearance-option input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; }
 .appearance-option > span { min-height: 50px; display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 7px 8px; border: 1px solid rgba(177, 207, 241, .12); border-radius: 8px; background: rgba(255,255,255,.025); color: #8494aa; transition: color .16s ease, border-color .16s ease, background .16s ease, box-shadow .16s ease; }
 .appearance-option strong { color: #b7c8db; font-size: 9px; font-weight: 500; }
-.appearance-option small { color: #718198; font-size: 7px; line-height: 1.35; }
+.appearance-option small { color: #718198; font-size: 8px; line-height: 1.35; }
 .appearance-option:hover > span { color: #dbeaff; border-color: rgba(157, 199, 244, .3); }
 .appearance-option input:checked + span { color: #d9ecff; border-color: rgba(129, 190, 255, .48); background: rgba(77, 143, 210, .15); box-shadow: inset 0 0 12px rgba(66, 136, 211, .08); }
 .appearance-option input:checked + span strong { color: #e2f1ff; }

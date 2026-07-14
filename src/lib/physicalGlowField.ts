@@ -2,6 +2,7 @@ import type { PhysicalGlowResult } from './physicalGlowProtocol'
 import { STAR_CATALOG } from '../data/starCatalog'
 import { equatorialToHorizontal } from './astronomy'
 import { apparentStarMagnitude } from './starAppearance'
+import { NATURAL_SKY_LUMINANCE } from './appearance'
 import type { Atmosphere, Location, SkyMetrics } from '../types'
 
 export type DirectionalGlowSample = {
@@ -109,7 +110,7 @@ export function calculatePhysicalSkyMetrics(
   moonLight = 0,
 ): SkyMetrics {
   const zenith = physicalZenithSample(field)
-  const naturalLuminance = 0.0022
+  const naturalLuminance = NATURAL_SKY_LUMINANCE
   const twilight = clamp((sunAltitude + 18) / 18, 0, 1)
   const brightnessRatio = 1 + zenith.luminance / naturalLuminance + twilight * 180 + moonLight * 8
   const zenithMag = clamp(21.92 - 2.5 * Math.log10(brightnessRatio), 14, 21.92)

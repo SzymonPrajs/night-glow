@@ -20,6 +20,7 @@ import SettingsPanel from './components/SettingsPanel'
 import SkyCanvas from './components/SkyCanvas'
 import { usePhysicalGlow, type PhysicalGlowAnalysisState } from './hooks/usePhysicalGlow'
 import { getSolarSystem } from './lib/astronomy'
+import { appearanceMetrics } from './lib/appearanceMetrics'
 import { analyzeOpenMap, fallbackAnalysis } from './lib/osm'
 import { calculatePhysicalSkyMetrics } from './lib/physicalGlowField'
 import { clamp } from './lib/skyModel'
@@ -131,6 +132,10 @@ export default function App() {
     () => calculatePhysicalSkyMetrics(physicalGlow.result, date, location, atmosphere, sun?.altitude, moonLight),
     [physicalGlow.result, date, location, atmosphere, sun?.altitude, moonLight],
   )
+  const displayedMetrics = useMemo(
+    () => appearanceMetrics(appearanceMode, metrics, physicalGlow.result, date, location, atmosphere),
+    [appearanceMode, metrics, physicalGlow.result, date, location, atmosphere],
+  )
 
   const nudgeTime = (hours: number) => setDate((current) => new Date(current.getTime() + hours * 3_600_000))
   const direction = compassDirection(view.azimuth)
@@ -157,6 +162,7 @@ export default function App() {
         location={location}
         atmosphere={atmosphere}
         appearanceMode={appearanceMode}
+        moonLight={moonLight}
         glowField={physicalGlow.result}
         metrics={metrics}
         date={date}
@@ -178,10 +184,10 @@ export default function App() {
         </div>
 
         <div className="sky-summary" aria-label="Sky visibility summary">
-          <SummaryMetric label="Bortle" value={`Class ${metrics.bortle}`} />
-          <SummaryMetric label="Sky quality" value={`${metrics.zenithMag.toFixed(2)} mag`} />
-          <SummaryMetric label="Naked-eye limit" value={`+${metrics.limitingMagnitude.toFixed(1)}`} />
-          <SummaryMetric label="Visible stars" value={`~${metrics.visibleStars.toLocaleString()}`} />
+          <SummaryMetric label="Bortle" value={`Class ${displayedMetrics.bortle}`} />
+          <SummaryMetric label="Sky quality" value={`${displayedMetrics.zenithMag.toFixed(2)} mag`} />
+          <SummaryMetric label="Naked-eye limit" value={`+${displayedMetrics.limitingMagnitude.toFixed(1)}`} />
+          <SummaryMetric label="Visible stars" value={`~${displayedMetrics.visibleStars.toLocaleString()}`} />
         </div>
 
         <div aria-hidden="true" />
@@ -235,10 +241,10 @@ export default function App() {
 
       <SideDrawer
         side="right"
-        label="Atmosphere settings"
+        label="Sky settings"
         tabIcon={<Settings2 size={18} />}
         panelClass="settings-panel"
-        panelLabel="Atmospheric scattering settings"
+        panelLabel="Sky appearance and atmospheric scattering settings"
         pinned={settingsPinned}
         open={settingsOpen}
         onOpenChange={setSettingsOpen}

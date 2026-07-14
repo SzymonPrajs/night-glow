@@ -16,7 +16,7 @@ export const APPEARANCE_PROFILES: Record<AppearanceMode, AppearanceProfile> = {
     planetOpacity: 1,
   },
   realistic: {
-    rendererExposure: 0.82,
+    rendererExposure: 1,
     milkyWayOpacity: 0.045,
     deepSkyOpacity: 0.16,
     planetOpacity: 0.62,
@@ -37,6 +37,16 @@ export const NATURAL_SKY_LUMINANCE = rgbLuminance(NATURAL_SKY_RGB)
 export function realisticSkyDisplayLuminance(physicalLuminance: number) {
   const ratio = Math.max(1e-6, physicalLuminance / NATURAL_SKY_LUMINANCE)
   return Math.min(0.03, 0.0015 * ratio ** 0.42)
+}
+
+export function realisticBaseSkyLuminance(sunAltitude: number, moonLight = 0, horizon = 0) {
+  const horizonMix = Math.max(0, Math.min(1, horizon))
+  const twilight = Math.max(0, Math.min(1, (sunAltitude + 18) / 18))
+  return NATURAL_SKY_LUMINANCE * (
+    1 + horizonMix * 0.45 +
+    180 * twilight * (1 + horizonMix * 1.6) +
+    8 * Math.max(0, moonLight) * (1 + horizonMix * 0.5)
+  )
 }
 
 export function linearToSrgb(value: number) {
