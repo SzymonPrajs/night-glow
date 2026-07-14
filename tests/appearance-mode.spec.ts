@@ -1,19 +1,21 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 const APPEARANCE_STORAGE_KEY = 'night-glow:appearance-mode'
 
-test('offers accessible appearance modes without recomputing the physical analysis', async ({ page }) => {
+test('changes only sky presentation without changing physical stars, metrics, or glow', async ({ page }) => {
+  test.setTimeout(45_000)
   await page.goto('/')
 
   const shell = page.locator('.app-shell')
   const progress = page.locator('.analysis-progress-track')
   const summary = page.getByLabel('Sky visibility summary')
+  const canvas = page.locator('canvas.sky-canvas')
+  const solverTimings = page.getByLabel('Solver timing breakdown')
   await expect(shell).toHaveAttribute('data-appearance', 'realistic')
   await expect(progress).toHaveAttribute('aria-valuetext', 'Physical sky field ready')
 
   const summaryBefore = await summary.innerText()
-  const physicalSummaryBefore = await summary.locator('.summary-metric').nth(0).innerText() +
-    await summary.locator('.summary-metric').nth(1).innerText()
+  const solverTimingsBefore = await solverTimings.innerText()
   const progressTextBefore = await progress.getAttribute('aria-valuetext')
   const progressValueBefore = await progress.getAttribute('aria-valuenow')
 
@@ -24,17 +26,20 @@ test('offers accessible appearance modes without recomputing the physical analys
   await expect(appearanceGroup).toBeVisible()
   await expect(realistic).toBeChecked()
   await expect(atlas).not.toBeChecked()
+  await settleRendering(page)
+  const realisticFrame = await canvas.screenshot()
 
   await realistic.focus()
   await page.keyboard.press('ArrowRight')
   await expect(shell).toHaveAttribute('data-appearance', 'atlas')
   await expect(atlas).toBeChecked()
   await expect(realistic).not.toBeChecked()
+  await settleRendering(page)
   const summaryAfter = await summary.innerText()
-  const physicalSummaryAfter = await summary.locator('.summary-metric').nth(0).innerText() +
-    await summary.locator('.summary-metric').nth(1).innerText()
-  expect(physicalSummaryAfter).toBe(physicalSummaryBefore)
-  expect(summaryAfter).not.toBe(summaryBefore)
+  const atlasFrame = await canvas.screenshot()
+  expect(summaryAfter).toBe(summaryBefore)
+  expect(await solverTimings.innerText()).toBe(solverTimingsBefore)
+  expect(atlasFrame.equals(realisticFrame)).toBeFalsy()
   await expect(progress).toHaveAttribute('aria-valuetext', progressTextBefore!)
   await expect(progress).toHaveAttribute('aria-valuenow', progressValueBefore!)
   await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), APPEARANCE_STORAGE_KEY)).toBe('atlas')
@@ -48,7 +53,6 @@ test('offers accessible appearance modes without recomputing the physical analys
 
   await page.reload()
   await expect(shell).toHaveAttribute('data-appearance', 'atlas')
-  await page.getByRole('button', { name: 'Show Sky settings' }).hover()
   await expect(page.getByRole('radio', { name: /^Atlas/ })).toBeChecked()
 })
 
@@ -63,3 +67,9 @@ test('falls back to Realistic when persisted appearance data is malformed', asyn
   await expect(page.getByRole('radio', { name: /^Realistic/ })).toBeChecked()
   await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), APPEARANCE_STORAGE_KEY)).toBe('realistic')
 })
+
+async function settleRendering(page: Page) {
+  await page.evaluate(() => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+  }))
+}

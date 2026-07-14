@@ -3,9 +3,10 @@ import type { CatalogStar } from '../src/data/starCatalog'
 import {
   APPEARANCE_PROFILES,
   NATURAL_SKY_LUMINANCE,
+  linearToSrgb,
   realisticBaseSkyLuminance,
+  realisticStarDisplaySignal,
   realisticSkyDisplayLuminance,
-  realisticVisualLimit,
 } from '../src/lib/appearance'
 import {
   realisticDispersionPixels,
@@ -13,6 +14,7 @@ import {
   realisticStarPeak,
   apparentStarMagnitude,
   starAppearance,
+  starVisibility,
   type StarAppearance,
 } from '../src/lib/starAppearance'
 import type { Atmosphere } from '../src/types'
@@ -37,12 +39,14 @@ assert.deepEqual(APPEARANCE_PROFILES.atlas, {
   milkyWayOpacity: 0.24,
   deepSkyOpacity: 1,
   planetOpacity: 1,
+  starDisplayGain: 1,
 })
 assert.deepEqual(APPEARANCE_PROFILES.realistic, {
   rendererExposure: 1,
   milkyWayOpacity: 0.045,
   deepSkyOpacity: 0.16,
   planetOpacity: 0.62,
+  starDisplayGain: 1.6,
 })
 assert(APPEARANCE_PROFILES.realistic.rendererExposure < APPEARANCE_PROFILES.atlas.rendererExposure)
 assert(APPEARANCE_PROFILES.realistic.milkyWayOpacity < APPEARANCE_PROFILES.atlas.milkyWayOpacity)
@@ -72,15 +76,46 @@ assert(screenshotTwilightBase > darkBase, 'Astronomical twilight must begin belo
 assert(twilightHorizon > screenshotTwilightBase, 'Twilight must brighten toward the horizon')
 assert(realisticSkyDisplayLuminance(moonlitBase) > realisticSkyDisplayLuminance(darkBase))
 
-const visualLimits = [14, 18.7, 20.3, 21.8, 21.92, 24].map(realisticVisualLimit)
-assertAlmostEqual(realisticVisualLimit(21.92), 7.15, 1e-12)
-assertAlmostEqual(realisticVisualLimit(18.7), 4.574, 1e-12)
-assert(realisticVisualLimit(18.7) >= 4.3 && realisticVisualLimit(18.7) <= 5)
-assert(realisticVisualLimit(21.8) >= 6.9)
-assertAlmostEqual(realisticVisualLimit(14), 0.814, 1e-12)
-assert.equal(realisticVisualLimit(0), 0)
-assert.equal(realisticVisualLimit(24), 7.15)
-assertNonDecreasing(visualLimits, 'Visual limiting magnitude')
+const linearStarSignals = [-1, 0, 0.0001, 0.001, 0.01, 0.1, 0.5, 1]
+const displayStarSignals = linearStarSignals.map(realisticStarDisplaySignal)
+const srgbStarSignals = displayStarSignals.map(linearToSrgb)
+assertAlmostEqual(realisticStarDisplaySignal(-1), 0, 1e-12)
+assertAlmostEqual(realisticStarDisplaySignal(0), 0, 1e-12)
+assertAlmostEqual(realisticStarDisplaySignal(0.001), 0.0016 / 1.0006, 1e-12)
+assert(realisticStarDisplaySignal(0.01) > realisticStarDisplaySignal(0.001))
+assertAlmostEqual(realisticStarDisplaySignal(1), 1, 1e-12)
+assertNonDecreasing(displayStarSignals, 'Bounded Realistic stellar display response')
+assertNonDecreasing(srgbStarSignals, 'Realistic stellar sRGB display response')
+assert(displayStarSignals.every((value) => value >= 0 && value <= 1))
+assert(srgbStarSignals.every((value) => value >= 0 && value <= 1))
+assert(srgbStarSignals[4] > 0.1, 'A faint 0.01 linear stellar signal must remain legible on an sRGB display')
+for (const signal of linearStarSignals.filter((value) => value > 0 && value <= 1)) {
+  const gain = realisticStarDisplaySignal(signal) / signal
+  assert(gain >= 1 && gain <= APPEARANCE_PROFILES.realistic.starDisplayGain)
+}
+
+const visibilityLimits = [3.5, 4.8, 6.2]
+const visibilityMagnitudes = Array.from({ length: 31 }, (_, index) => -1 + index * 0.25)
+const visibilitySupport = visibilityLimits.map((limit) => {
+  const values = visibilityMagnitudes.map((magnitude) => starVisibility(magnitude, limit))
+  assertNonIncreasing(values, `Stellar visibility at limiting magnitude ${limit}`)
+  assert(values[0] > values.at(-1)!)
+  assert(values.every((value) => value >= 0 && value <= 1))
+
+  for (const magnitude of visibilityMagnitudes) {
+    const star = makeStar(`Magnitude ${magnitude}`, magnitude, 0.65, 'G2V')
+    const apparentMagnitude = apparentStarMagnitude(star, 60, atmosphere)
+    const expectedSupport = starVisibility(apparentMagnitude, limit) > 0
+    const realistic = starAppearance(star, 60, limit, atmosphere, 'realistic')
+    const atlas = starAppearance(star, 60, limit, atmosphere, 'atlas')
+    assert.equal(realistic.opacity > 0, expectedSupport,
+      `Realistic visibility support diverged at m=${magnitude}, limit=${limit}`)
+    assert.equal(atlas.opacity > 0, expectedSupport,
+      `Atlas visibility support diverged at m=${magnitude}, limit=${limit}`)
+  }
+
+  return values
+})
 
 const peakMagnitudes = [-1, 0, 1, 2, 3, 4, 5, 6]
 const starPeaks = peakMagnitudes.map(realisticStarPeak)
@@ -100,8 +135,8 @@ const representativeStars = [
 ]
 const comparisons = representativeStars.map((star) => ({
   name: star.name,
-  realistic: starAppearance(star, 20, 7.15, atmosphere, 'realistic', 21.92),
-  atlas: starAppearance(star, 20, 7.15, atmosphere, 'atlas', 21.92),
+  realistic: starAppearance(star, 20, 7.15, atmosphere, 'realistic'),
+  atlas: starAppearance(star, 20, 7.15, atmosphere, 'atlas'),
 }))
 
 for (const comparison of comparisons) {
@@ -127,10 +162,10 @@ assert(red.r > red.b, 'A realistic M star must retain a subtle red ordering')
 
 const bright = makeStar('Bright G star', 0, 0.65, 'G2V')
 const faint = makeStar('Faint G star', 5, 0.65, 'G2V')
-const brightRealistic = starAppearance(bright, 60, 7.15, atmosphere, 'realistic', 21.92)
-const faintRealistic = starAppearance(faint, 60, 7.15, atmosphere, 'realistic', 21.92)
-const brightAtlas = starAppearance(bright, 60, 7.15, atmosphere, 'atlas', 21.92)
-const faintAtlas = starAppearance(faint, 60, 7.15, atmosphere, 'atlas', 21.92)
+const brightRealistic = starAppearance(bright, 60, 7.15, atmosphere, 'realistic')
+const faintRealistic = starAppearance(faint, 60, 7.15, atmosphere, 'realistic')
+const brightAtlas = starAppearance(bright, 60, 7.15, atmosphere, 'atlas')
+const faintAtlas = starAppearance(faint, 60, 7.15, atmosphere, 'atlas')
 assert(brightRealistic.opacity / faintRealistic.opacity > 60)
 assert(brightAtlas.opacity / faintAtlas.opacity < 1.2)
 assert(brightRealistic.size < brightAtlas.size * 0.4)
@@ -169,9 +204,15 @@ console.log(JSON.stringify({
     ratios: skyRatios,
     displayLuminance: skyDisplayLuminance,
   },
-  visualLimit: {
-    sqm18_7: realisticVisualLimit(18.7),
-    sqm21_8: realisticVisualLimit(21.8),
+  starDisplay: {
+    linearSignals: linearStarSignals,
+    liftedLinearSignals: displayStarSignals,
+    srgbSignals: srgbStarSignals,
+  },
+  visibility: {
+    limits: visibilityLimits,
+    magnitudes: visibilityMagnitudes,
+    support: visibilitySupport,
   },
   stars: {
     magnitudes: peakMagnitudes,
@@ -251,5 +292,11 @@ function assertNonDecreasing(values: readonly number[], label: string) {
 function assertStrictlyDecreasing(values: readonly number[], label: string) {
   values.forEach((value, index) => {
     if (index > 0) assert(value < values[index - 1], `${label} did not decrease at index ${index}`)
+  })
+}
+
+function assertNonIncreasing(values: readonly number[], label: string) {
+  values.forEach((value, index) => {
+    if (index > 0) assert(value <= values[index - 1], `${label} increased at index ${index}`)
   })
 }
