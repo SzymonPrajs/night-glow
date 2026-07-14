@@ -1,10 +1,21 @@
 import { Activity, Cloud, CloudFog, Droplets, Gauge, Layers3, MountainSnow, Sparkles, SunMedium, Wind } from 'lucide-react'
-import type { Atmosphere } from '../types'
+import type { AppearanceMode, Atmosphere } from '../types'
 
 type SettingsPanelProps = {
   atmosphere: Atmosphere
+  appearanceMode: AppearanceMode
+  onAppearanceModeChange: (mode: AppearanceMode) => void
   onChange: (atmosphere: Atmosphere) => void
 }
+
+const APPEARANCE_MODES: ReadonlyArray<{
+  mode: AppearanceMode
+  label: string
+  description: string
+}> = [
+  { mode: 'realistic', label: 'Realistic', description: 'Natural brightness and low-light colour' },
+  { mode: 'atlas', label: 'Atlas', description: 'Enhanced visibility and object colour' },
+]
 
 const PRESETS: Array<{ name: string; values: Atmosphere }> = [
   {
@@ -33,10 +44,36 @@ const PRESETS: Array<{ name: string; values: Atmosphere }> = [
   },
 ]
 
-export default function SettingsPanel({ atmosphere, onChange }: SettingsPanelProps) {
+export default function SettingsPanel({
+  atmosphere,
+  appearanceMode,
+  onAppearanceModeChange,
+  onChange,
+}: SettingsPanelProps) {
   const set = (key: keyof Atmosphere, value: number) => onChange({ ...atmosphere, [key]: value })
   return (
     <>
+      <fieldset className="appearance-control">
+        <legend>Sky appearance</legend>
+        <div className="appearance-options">
+          {APPEARANCE_MODES.map(({ mode, label, description }) => (
+            <label className="appearance-option" key={mode}>
+              <input
+                type="radio"
+                name="sky-appearance"
+                value={mode}
+                checked={appearanceMode === mode}
+                onChange={() => onAppearanceModeChange(mode)}
+              />
+              <span>
+                <strong>{label}</strong>
+                <small>{description}</small>
+              </span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
       <div className="preset-row" aria-label="Weather presets">
         {PRESETS.map((preset) => {
           const active = Math.abs(atmosphere.aerosol - preset.values.aerosol) < 0.01 &&

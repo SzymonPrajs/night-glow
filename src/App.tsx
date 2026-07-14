@@ -23,7 +23,7 @@ import { getSolarSystem } from './lib/astronomy'
 import { analyzeOpenMap, fallbackAnalysis } from './lib/osm'
 import { calculatePhysicalSkyMetrics } from './lib/physicalGlowField'
 import { clamp } from './lib/skyModel'
-import type { Atmosphere, Location, MapAnalysis } from './types'
+import type { AppearanceMode, Atmosphere, Location, MapAnalysis } from './types'
 
 const INITIAL_LOCATION: Location = {
   lat: 52.2297,
@@ -46,6 +46,13 @@ const INITIAL_ATMOSPHERE: Atmosphere = {
   maxScatteringOrder: 3,
 }
 
+const APPEARANCE_STORAGE_KEY = 'night-glow:appearance-mode'
+
+function storedAppearanceMode(): AppearanceMode {
+  const stored = localStorage.getItem(APPEARANCE_STORAGE_KEY)
+  return stored === 'atlas' || stored === 'realistic' ? stored : 'realistic'
+}
+
 const EMPTY_ANALYSIS: MapAnalysis = {
   status: 'idle',
   progress: 0,
@@ -58,6 +65,7 @@ const EMPTY_ANALYSIS: MapAnalysis = {
 export default function App() {
   const [location, setLocation] = useState(INITIAL_LOCATION)
   const [atmosphere, setAtmosphere] = useState(INITIAL_ATMOSPHERE)
+  const [appearanceMode, setAppearanceMode] = useState<AppearanceMode>(storedAppearanceMode)
   const [analysis, setAnalysis] = useState<MapAnalysis>(EMPTY_ANALYSIS)
   const [date, setDate] = useState(() => new Date())
   const [mapOpen, setMapOpen] = useState(false)
@@ -109,6 +117,10 @@ export default function App() {
     localStorage.setItem('night-glow:settings-pinned', String(settingsPinned))
   }, [settingsPinned])
 
+  useEffect(() => {
+    localStorage.setItem(APPEARANCE_STORAGE_KEY, appearanceMode)
+  }, [appearanceMode])
+
   const solarSystem = useMemo(() => getSolarSystem(date, location), [date, location])
   const sun = solarSystem.find((object) => object.kind === 'sun')
   const moon = solarSystem.find((object) => object.kind === 'moon')
@@ -140,10 +152,11 @@ export default function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" data-appearance={appearanceMode}>
       <SkyCanvas
         location={location}
         atmosphere={atmosphere}
+        appearanceMode={appearanceMode}
         glowField={physicalGlow.result}
         metrics={metrics}
         date={date}
@@ -237,7 +250,12 @@ export default function App() {
             onPinnedChange={setSettingsPin}
             onClose={() => { setSettingsPinned(false); setSettingsOpen(false) }}
           />
-          <SettingsPanel atmosphere={atmosphere} onChange={setAtmosphere} />
+          <SettingsPanel
+            atmosphere={atmosphere}
+            appearanceMode={appearanceMode}
+            onAppearanceModeChange={setAppearanceMode}
+            onChange={setAtmosphere}
+          />
       </SideDrawer>
 
       <div className="view-readout" aria-label="Current view direction">

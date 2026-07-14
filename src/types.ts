@@ -4,6 +4,8 @@ export type Location = {
   label: string
 }
 
+export type AppearanceMode = 'realistic' | 'atlas'
+
 export type Atmosphere = {
   /** Aerosol optical depth at 550 nm. */
   aerosol: number

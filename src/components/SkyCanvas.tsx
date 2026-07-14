@@ -3,19 +3,21 @@ import * as THREE from 'three'
 import { BRIGHT_STARS, DEEP_SKY } from '../data/celestial'
 import { STAR_CATALOG } from '../data/starCatalog'
 import { equatorialToHorizontal, galacticToEquatorial, horizontalVector, type HorizontalObject } from '../lib/astronomy'
+import { APPEARANCE_PROFILES, realisticGlowRgb, realisticVisualLimit } from '../lib/appearance'
 import { physicalZenithSample, samplePhysicalGlow } from '../lib/physicalGlowField'
 import type { PhysicalGlowResult } from '../lib/physicalGlowProtocol'
 import { buildPhysicalGlowRenderGrid } from '../lib/physicalGlowRender'
 import { clamp } from '../lib/skyModel'
 import { starAppearance } from '../lib/starAppearance'
 import { createLabelTexture, createOrbTexture, MILKY_WAY_POINTS } from '../lib/starField'
-import type { Atmosphere, Location, SkyMetrics } from '../types'
+import type { AppearanceMode, Atmosphere, Location, SkyMetrics } from '../types'
 
 type ViewState = { azimuth: number; altitude: number; fov: number }
 
 type SkyCanvasProps = {
   location: Location
   atmosphere: Atmosphere
+  appearanceMode: AppearanceMode
   glowField?: PhysicalGlowResult
   metrics: SkyMetrics
   date: Date
@@ -23,6 +25,45 @@ type SkyCanvasProps = {
   resetViewToken: number
   onViewChange: (view: ViewState) => void
 }
+
+const colorSpaceShader = `
+  float linearChannelToSrgb(float value) {
+    float safe = max(value, 0.0);
+    return safe <= 0.0031308 ? safe * 12.92 : 1.055 * pow(safe, 1.0 / 2.4) - 0.055;
+  }
+  vec3 linearToSrgb(vec3 value) {
+    return vec3(
+      linearChannelToSrgb(value.r),
+      linearChannelToSrgb(value.g),
+      linearChannelToSrgb(value.b)
+    );
+  }
+`
+
+const realisticSkyResponseShader = `
+  ${colorSpaceShader}
+  const vec3 NATURAL_SKY = vec3(0.0016, 0.0020, 0.0032);
+  const float NATURAL_SKY_Y = 0.0020016;
+  float visualLuminance(vec3 value) {
+    return dot(value, vec3(0.2126, 0.7152, 0.0722));
+  }
+  vec3 realisticSkyTone(vec3 radiance) {
+    float physicalY = max(visualLuminance(radiance), 0.0000001);
+    float displayY = min(0.03, 0.0015 * pow(max(physicalY / NATURAL_SKY_Y, 0.000001), 0.42));
+    vec3 scaled = max(radiance, vec3(0.0)) * (displayY / physicalY);
+    float mesopic = smoothstep(0.005, 0.5, physicalY);
+    float chroma = mix(0.12, 0.40, mesopic);
+    return linearToSrgb(max(mix(vec3(displayY), scaled, chroma), vec3(0.0)));
+  }
+  vec3 realisticBaseRadiance(float horizon, float sunAltitude) {
+    vec3 base = NATURAL_SKY * (1.0 + horizon * 0.45);
+    float twilight = clamp((sunAltitude + 18.0) / 18.0, 0.0, 1.0);
+    vec3 twilightColor = vec3(0.78, 0.88, 1.0);
+    twilightColor *= NATURAL_SKY_Y / visualLuminance(twilightColor);
+    base += twilightColor * (180.0 * twilight) * (1.0 + horizon * 1.6);
+    return base;
+  }
+`
 
 type SceneRefs = {
   scene: THREE.Scene
@@ -54,10 +95,13 @@ const pointVertexShader = `
 const pointFragmentShader = `
   varying vec3 vColor;
   varying float vOpacity;
+  uniform float uRealistic;
+  ${colorSpaceShader}
   void main() {
     float d = length(gl_PointCoord - vec2(.5));
     float alpha = smoothstep(.5, .06, d) * vOpacity;
-    gl_FragColor = vec4(vColor, alpha);
+    vec3 displayColor = mix(vColor, linearToSrgb(max(vColor, vec3(0.0))), uRealistic);
+    gl_FragColor = vec4(displayColor, alpha);
   }
 `
 
@@ -95,6 +139,8 @@ const starFragmentShader = `
   varying float vHaloWidth;
   varying float vHaloStrength;
   varying float vDispersion;
+  uniform float uRealistic;
+  ${colorSpaceShader}
   float gaussian(float radius, float sigma) {
     return exp(-0.5 * radius * radius / max(sigma * sigma, 0.0001));
   }
@@ -107,13 +153,16 @@ const starFragmentShader = `
     vec3 profile = vColor * (vec3(redCore, greenCore, blueCore) + halo);
     float intensity = max(profile.r, max(profile.g, profile.b));
     if (intensity < .002 || vOpacity <= 0.0) discard;
-    gl_FragColor = vec4(profile / max(intensity, .001), min(1.0, intensity * vOpacity));
+    vec3 normalizedColor = profile / max(intensity, .001);
+    vec3 displayColor = mix(normalizedColor, linearToSrgb(max(normalizedColor, vec3(0.0))), uRealistic);
+    gl_FragColor = vec4(displayColor, min(1.0, intensity * vOpacity));
   }
 `
 
 export default function SkyCanvas({
   location,
   atmosphere,
+  appearanceMode,
   glowField,
   metrics,
   date,
@@ -151,6 +200,9 @@ export default function SkyCanvas({
         uCloud: { value: 0.1 },
         uHumidity: { value: 0.35 },
         uSunAltitude: { value: -30 },
+        uZenithMag: { value: 21.92 },
+        uRealistic: { value: 1 },
+        uHasPhysicalGlow: { value: 0 },
       },
       vertexShader: `
         varying vec3 vDirection;
@@ -165,6 +217,10 @@ export default function SkyCanvas({
         uniform float uCloud;
         uniform float uHumidity;
         uniform float uSunAltitude;
+        uniform float uZenithMag;
+        uniform float uRealistic;
+        uniform float uHasPhysicalGlow;
+        ${realisticSkyResponseShader}
         void main() {
           float y = clamp(vDirection.y, -0.05, 1.0);
           float horizon = pow(1.0 - max(y, 0.0), 3.2);
@@ -180,6 +236,20 @@ export default function SkyCanvas({
           float clouds = smoothstep(.18 - uHumidity * .25, .78, n * .5 + .5) * uCloud;
           vec3 cloudColor = mix(vec3(.1, .11, .15), vec3(.43, .23, .12), uPollution * horizon);
           color = mix(color, cloudColor, clouds * (.22 + horizon * .38));
+          vec3 realisticBase = realisticBaseRadiance(horizon, uSunAltitude);
+          if (uHasPhysicalGlow < 0.5) {
+            float ratio = max(0.0, pow(10.0, 0.4 * (21.92 - uZenithMag)) - 1.0);
+            float twilightRatio = 180.0 * clamp((uSunAltitude + 18.0) / 18.0, 0.0, 1.0);
+            float fallbackRatio = max(0.0, ratio - twilightRatio);
+            vec3 fallbackColor = vec3(1.0, 0.78, 0.56);
+            fallbackColor *= NATURAL_SKY_Y / visualLuminance(fallbackColor);
+            realisticBase += fallbackColor * fallbackRatio * (0.35 + horizon * 0.65);
+          }
+          vec3 realisticColor = realisticSkyTone(realisticBase);
+          realisticColor *= 1.0 + clouds * 0.035;
+          float realisticDay = smoothstep(-6.0, 3.0, uSunAltitude);
+          realisticColor = mix(realisticColor, mix(dayTop, dayHorizon, horizon), realisticDay);
+          color = mix(color, realisticColor, uRealistic);
           gl_FragColor = vec4(color, 1.0);
         }
       `,
@@ -240,12 +310,16 @@ export default function SkyCanvas({
     refs.skyMaterial.uniforms.uCloud.value = atmosphere.cloud
     refs.skyMaterial.uniforms.uHumidity.value = atmosphere.humidity
     refs.skyMaterial.uniforms.uSunAltitude.value = sun?.altitude ?? -30
-    rebuildStars(refs, location, date, metrics, atmosphere, glowField)
-    rebuildMilkyWay(refs, location, date, metrics, atmosphere, glowField)
-    rebuildDeepSky(refs, location, date, metrics, glowField)
-    rebuildSolarSystem(refs, solarSystem, metrics, glowField)
-    rebuildPhysicalGlows(refs, glowField)
-  }, [location, date, metrics, atmosphere, solarSystem, glowField])
+    refs.skyMaterial.uniforms.uZenithMag.value = metrics.zenithMag
+    refs.skyMaterial.uniforms.uRealistic.value = appearanceMode === 'realistic' ? 1 : 0
+    refs.skyMaterial.uniforms.uHasPhysicalGlow.value = glowField ? 1 : 0
+    refs.renderer.toneMappingExposure = APPEARANCE_PROFILES[appearanceMode].rendererExposure
+    rebuildStars(refs, location, date, metrics, atmosphere, appearanceMode, glowField)
+    rebuildMilkyWay(refs, location, date, metrics, atmosphere, appearanceMode, glowField)
+    rebuildDeepSky(refs, location, date, metrics, appearanceMode, glowField)
+    rebuildSolarSystem(refs, solarSystem, metrics, appearanceMode, glowField)
+    rebuildPhysicalGlows(refs, glowField, appearanceMode, sun?.altitude ?? -30)
+  }, [location, date, metrics, atmosphere, solarSystem, glowField, appearanceMode])
 
   useEffect(() => {
     yawRef.current = 0
@@ -305,6 +379,7 @@ function rebuildStars(
   date: Date,
   metrics: SkyMetrics,
   atmosphere: Atmosphere,
+  appearanceMode: AppearanceMode,
   glowField?: PhysicalGlowResult,
 ) {
   clearGroup(refs.starGroup)
@@ -323,7 +398,14 @@ function rebuildStars(
     const directionalLimit = glowField
       ? samplePhysicalGlow(glowField, horizontal.azimuth, horizontal.altitude).limitingMagnitude - globalLightPenalty
       : metrics.limitingMagnitude
-    const appearance = starAppearance(star, horizontal.altitude, directionalLimit, atmosphere)
+    const appearance = starAppearance(
+      star,
+      horizontal.altitude,
+      directionalLimit,
+      atmosphere,
+      appearanceMode,
+      metrics.zenithMag,
+    )
     positions.push(vector.x, vector.y, vector.z)
     colors.push(appearance.color.r, appearance.color.g, appearance.color.b)
     sizes.push(appearance.size)
@@ -342,7 +424,7 @@ function rebuildStars(
   geometry.setAttribute('aHaloWidth', new THREE.Float32BufferAttribute(haloWidths, 1))
   geometry.setAttribute('aHaloStrength', new THREE.Float32BufferAttribute(haloStrengths, 1))
   geometry.setAttribute('aDispersion', new THREE.Float32BufferAttribute(dispersions, 1))
-  const material = makeStarMaterial(refs.renderer)
+  const material = makeStarMaterial(refs.renderer, appearanceMode)
   refs.starGroup.add(new THREE.Points(geometry, material))
 
   for (const star of BRIGHT_STARS.filter((item) => item.mag < 1.65)) {
@@ -353,7 +435,12 @@ function rebuildStars(
       : metrics.limitingMagnitude
     if (star.mag >= localLimit) continue
     const vector = horizontalVector(horizontal.azimuth, horizontal.altitude, 96)
-    const label = makeLabel(`${star.name}  ·  ${star.constellation}`, '#a9cfff')
+    const label = makeLabel(
+      `${star.name}  ·  ${star.constellation}`,
+      appearanceMode === 'realistic' ? '#c9d0d5' : '#a9cfff',
+      appearanceMode === 'realistic' ? 0.58 : 0.92,
+      appearanceMode === 'realistic' ? 5.7 : 7.2,
+    )
     label.position.set(vector.x, vector.y + 1.4, vector.z)
     refs.starGroup.add(label)
   }
@@ -365,6 +452,7 @@ function rebuildMilkyWay(
   date: Date,
   metrics: SkyMetrics,
   atmosphere: Atmosphere,
+  appearanceMode: AppearanceMode,
   glowField?: PhysicalGlowResult,
 ) {
   clearGroup(refs.milkyWayGroup)
@@ -379,13 +467,16 @@ function rebuildMilkyWay(
     const localLimit = glowField
       ? samplePhysicalGlow(glowField, horizontal.azimuth, horizontal.altitude).limitingMagnitude - globalLightPenalty
       : metrics.limitingMagnitude
-    const visibility = clamp((localLimit - 4.55) / 2.2, 0, 1) * (1 - atmosphere.cloud * 0.86)
+    const visibility = appearanceMode === 'realistic'
+      ? clamp((Math.min(localLimit, realisticVisualLimit(metrics.zenithMag)) - 5.55) / 0.85, 0, 1) * (1 - atmosphere.cloud * 0.9)
+      : clamp((localLimit - 4.55) / 2.2, 0, 1) * (1 - atmosphere.cloud * 0.86)
     if (visibility < 0.025) continue
     const vector = horizontalVector(horizontal.azimuth, horizontal.altitude, 108)
     positions.push(vector.x, vector.y, vector.z)
-    colors.push(0.55, 0.67, 0.8)
-    sizes.push(1.1 + point.intensity * 1.45)
-    opacities.push(point.intensity * visibility * 0.24)
+    if (appearanceMode === 'realistic') colors.push(0.44, 0.47, 0.5)
+    else colors.push(0.55, 0.67, 0.8)
+    sizes.push(appearanceMode === 'realistic' ? 0.75 + point.intensity * 0.8 : 1.1 + point.intensity * 1.45)
+    opacities.push(point.intensity * visibility * APPEARANCE_PROFILES[appearanceMode].milkyWayOpacity)
   }
   if (!positions.length) return
   const geometry = new THREE.BufferGeometry()
@@ -393,7 +484,7 @@ function rebuildMilkyWay(
   geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
   geometry.setAttribute('aSize', new THREE.Float32BufferAttribute(sizes, 1))
   geometry.setAttribute('aOpacity', new THREE.Float32BufferAttribute(opacities, 1))
-  refs.milkyWayGroup.add(new THREE.Points(geometry, makePointMaterial(refs.renderer, THREE.AdditiveBlending)))
+  refs.milkyWayGroup.add(new THREE.Points(geometry, makePointMaterial(refs.renderer, appearanceMode, THREE.AdditiveBlending)))
 }
 
 function rebuildDeepSky(
@@ -401,12 +492,15 @@ function rebuildDeepSky(
   location: Location,
   date: Date,
   metrics: SkyMetrics,
+  appearanceMode: AppearanceMode,
   glowField?: PhysicalGlowResult,
 ) {
   clearGroup(refs.deepGroup)
   const globalLightPenalty = directionalLightPenalty(glowField, metrics)
   for (const object of DEEP_SKY) {
-    const required = object.kind === 'cluster' ? object.mag - 0.6 : object.mag + 1.25
+    const required = appearanceMode === 'realistic'
+      ? object.kind === 'cluster' ? object.mag + 0.25 : object.mag + 2
+      : object.kind === 'cluster' ? object.mag - 0.6 : object.mag + 1.25
     const horizontal = equatorialToHorizontal(object.ra, object.dec, date, location)
     if (horizontal.altitude < 1) continue
     const localLimit = glowField
@@ -414,12 +508,26 @@ function rebuildDeepSky(
       : metrics.limitingMagnitude
     if (localLimit < required) continue
     const vector = horizontalVector(horizontal.azimuth, horizontal.altitude, 98)
-    const color = object.kind === 'nebula' ? '#80c6c2' : object.kind === 'galaxy' ? '#b1b9d9' : '#a8c7ff'
-    const sprite = makeOrb(color, 'rgba(117, 155, 214, .25)', clamp(object.size / 18, 1.5, 7))
+    const color = appearanceMode === 'realistic'
+      ? '#d0d5d2'
+      : object.kind === 'nebula' ? '#80c6c2' : object.kind === 'galaxy' ? '#b1b9d9' : '#a8c7ff'
+    const atlasScale = clamp(object.size / 18, 1.5, 7)
+    const sprite = makeOrb(
+      color,
+      appearanceMode === 'realistic' ? 'rgba(214, 220, 218, .07)' : 'rgba(117, 155, 214, .25)',
+      appearanceMode === 'realistic' ? atlasScale * 0.56 : atlasScale,
+      APPEARANCE_PROFILES[appearanceMode].deepSkyOpacity,
+    )
     sprite.position.set(vector.x, vector.y, vector.z)
     refs.deepGroup.add(sprite)
-    if (localLimit > 5.1 || object.mag < 4.2) {
-      const label = makeLabel(`${object.catalog}  ${object.name}`, color)
+    if ((appearanceMode === 'atlas' && (localLimit > 5.1 || object.mag < 4.2)) ||
+        (appearanceMode === 'realistic' && object.mag < 3 && localLimit > required + 0.5)) {
+      const label = makeLabel(
+        `${object.catalog}  ${object.name}`,
+        color,
+        appearanceMode === 'realistic' ? 0.52 : 0.92,
+        appearanceMode === 'realistic' ? 5.4 : 7.2,
+      )
       label.position.set(vector.x, vector.y + 1.5, vector.z)
       refs.deepGroup.add(label)
     }
@@ -430,6 +538,7 @@ function rebuildSolarSystem(
   refs: SceneRefs,
   objects: HorizontalObject[],
   metrics: SkyMetrics,
+  appearanceMode: AppearanceMode,
   glowField?: PhysicalGlowResult,
 ) {
   clearGroup(refs.planetGroup)
@@ -442,21 +551,42 @@ function rebuildSolarSystem(
     if (object.kind === 'planet' && object.magnitude > localLimit) continue
     const vector = horizontalVector(object.azimuth, object.altitude, 92)
     const style = planetStyle(object.name)
-    const scale = object.kind === 'sun' ? 8 : object.kind === 'moon' ? 5.5 : clamp(4.3 - object.magnitude * 0.35, 2.1, 5.5)
-    const orb = makeOrb(style.color, style.halo, scale)
+    const atlasScale = object.kind === 'sun' ? 8 : object.kind === 'moon' ? 5.5 : clamp(4.3 - object.magnitude * 0.35, 2.1, 5.5)
+    const scale = appearanceMode === 'realistic'
+      ? object.kind === 'sun' || object.kind === 'moon' ? 0.86 : clamp(0.5 - object.magnitude * 0.045, 0.27, 0.72)
+      : atlasScale
+    const color = appearanceMode === 'realistic' ? subduedColor(style.color) : style.color
+    const orb = makeOrb(
+      color,
+      appearanceMode === 'realistic' ? 'rgba(255, 255, 255, .09)' : style.halo,
+      scale,
+      APPEARANCE_PROFILES[appearanceMode].planetOpacity,
+    )
     orb.position.set(vector.x, vector.y, vector.z)
     refs.planetGroup.add(orb)
-    const label = makeLabel(`${object.name}${object.kind === 'moon' ? `  ${Math.round((object.phase ?? 0) * 100)}%` : ''}`, style.color)
+    const label = makeLabel(
+      `${object.name}${object.kind === 'moon' ? `  ${Math.round((object.phase ?? 0) * 100)}%` : ''}`,
+      color,
+      appearanceMode === 'realistic' ? 0.62 : 0.92,
+      appearanceMode === 'realistic' ? 5.8 : 7.2,
+    )
     label.position.set(vector.x, vector.y + scale * 0.45, vector.z)
     refs.planetGroup.add(label)
   }
 }
 
-function rebuildPhysicalGlows(refs: SceneRefs, field?: PhysicalGlowResult) {
+function rebuildPhysicalGlows(
+  refs: SceneRefs,
+  field: PhysicalGlowResult | undefined,
+  appearanceMode: AppearanceMode,
+  sunAltitude: number,
+) {
   clearGroup(refs.glowGroup)
   if (!field?.rgbRadiance.length) return
 
-  const renderField = buildPhysicalGlowRenderGrid(field)
+  const renderField = buildPhysicalGlowRenderGrid(
+    appearanceMode === 'realistic' ? { ...field, rgbRadiance: realisticGlowRgb(field) } : field,
+  )
   const altitudes = renderField.elevationDeg
   const positions: number[] = []
   const radiance: number[] = []
@@ -501,21 +631,34 @@ function rebuildPhysicalGlows(refs: SceneRefs, field?: PhysicalGlowResult) {
     blending: THREE.AdditiveBlending,
     uniforms: {
       uExposure: { value: 32 },
+      uRealistic: { value: appearanceMode === 'realistic' ? 1 : 0 },
+      uSunAltitude: { value: sunAltitude },
     },
     vertexShader: `
       attribute vec3 aRadiance;
       varying vec3 vRadiance;
+      varying float vAltitude;
       void main() {
         vRadiance = aRadiance;
+        vAltitude = normalize(position).y;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
     `,
     fragmentShader: `
       varying vec3 vRadiance;
+      varying float vAltitude;
       uniform float uExposure;
+      uniform float uRealistic;
+      uniform float uSunAltitude;
+      ${realisticSkyResponseShader}
       void main() {
         vec3 mapped = vec3(1.0) - exp(-max(vRadiance, vec3(0.0)) * uExposure);
-        gl_FragColor = vec4(mapped, .82);
+        float horizon = pow(1.0 - clamp(vAltitude, 0.0, 1.0), 3.2);
+        vec3 base = realisticBaseRadiance(horizon, uSunAltitude);
+        vec3 realisticDelta = max(realisticSkyTone(base + max(vRadiance, vec3(0.0))) - realisticSkyTone(base), vec3(0.0));
+        vec4 atlasOutput = vec4(mapped, .82);
+        vec4 realisticOutput = vec4(realisticDelta, 1.0);
+        gl_FragColor = mix(atlasOutput, realisticOutput, uRealistic);
       }
     `,
   })
@@ -527,46 +670,61 @@ function directionalLightPenalty(field: PhysicalGlowResult | undefined, metrics:
   return Math.max(0, physicalZenithSample(field).limitingMagnitude - metrics.limitingMagnitude)
 }
 
-function makePointMaterial(renderer: THREE.WebGLRenderer, blending: THREE.Blending = THREE.NormalBlending) {
+function makePointMaterial(
+  renderer: THREE.WebGLRenderer,
+  appearanceMode: AppearanceMode,
+  blending: THREE.Blending = THREE.NormalBlending,
+) {
   return new THREE.ShaderMaterial({
     vertexColors: true,
     transparent: true,
     depthWrite: false,
     blending,
-    uniforms: { uPixelRatio: { value: Math.min(renderer.getPixelRatio(), 2) } },
+    uniforms: {
+      uPixelRatio: { value: Math.min(renderer.getPixelRatio(), 2) },
+      uRealistic: { value: appearanceMode === 'realistic' ? 1 : 0 },
+    },
     vertexShader: pointVertexShader,
     fragmentShader: pointFragmentShader,
   })
 }
 
-function makeStarMaterial(renderer: THREE.WebGLRenderer) {
+function makeStarMaterial(renderer: THREE.WebGLRenderer, appearanceMode: AppearanceMode) {
   return new THREE.ShaderMaterial({
     vertexColors: true,
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
-    uniforms: { uPixelRatio: { value: Math.min(renderer.getPixelRatio(), 2) } },
+    uniforms: {
+      uPixelRatio: { value: Math.min(renderer.getPixelRatio(), 2) },
+      uRealistic: { value: appearanceMode === 'realistic' ? 1 : 0 },
+    },
     vertexShader: starVertexShader,
     fragmentShader: starFragmentShader,
   })
 }
 
-function makeLabel(text: string, accent: string) {
+function makeLabel(text: string, accent: string, opacity = 0.92, scale = 7.2) {
   const { texture, aspect } = createLabelTexture(text, accent)
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false, opacity: 0.92 }))
-  sprite.scale.set(7.2 * aspect, 7.2, 1)
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false, opacity }))
+  sprite.scale.set(scale * aspect, scale, 1)
   return sprite
 }
 
-function makeOrb(color: string, halo: string, scale: number) {
+function makeOrb(color: string, halo: string, scale: number, opacity = 1) {
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
     map: createOrbTexture(color, halo),
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
+    opacity,
   }))
   sprite.scale.set(scale, scale, 1)
   return sprite
+}
+
+function subduedColor(color: string) {
+  return `#${new THREE.Color(color).lerp(new THREE.Color('#d9dddf'), 0.68).getHexString()}`
 }
 
 function makeHorizonSilhouette() {
