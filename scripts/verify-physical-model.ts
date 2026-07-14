@@ -18,6 +18,7 @@ import {
   createRingEmissionField,
   DEFAULT_RELATIVE_AZIMUTHS_DEG,
   DEFAULT_SKY_ELEVATIONS_DEG,
+  lowCloudUrbanReturnEnhancement,
   sampleAtmosphericKernel,
   solidAngleElevationWeights,
 } from '../src/lib/physics'
@@ -28,6 +29,49 @@ const observer = { lat: 51.5329, lon: 18.9390 }
 const regionalSources = createRegionalSettlementSources()
 const lodz = regionalSources.find((source) => source.id === 'regional-pl-lodz')
 assert(lodz, 'The regional model must contain the extended Lodz footprint')
+
+const clearCloudReturn = lowCloudUrbanReturnEnhancement({
+  coverage: 0,
+  opticalDepth: 25,
+  baseAltitudeKm: 0.4,
+})
+const exactCloudReturn = lowCloudUrbanReturnEnhancement({
+  coverage: 0.5,
+  opticalDepth: 3,
+  baseAltitudeKm: 2,
+})
+const exactCloudReturnFormula = 1 + 0.8 * 0.5 * (1 - Math.exp(-3 / 3)) * Math.exp(-2 / 2)
+const saturatedCloudReturn = lowCloudUrbanReturnEnhancement({
+  coverage: 1,
+  opticalDepth: 1e6,
+  baseAltitudeKm: 0,
+})
+const thinHighCloudReturn = lowCloudUrbanReturnEnhancement({
+  coverage: 0.65,
+  opticalDepth: 0.25,
+  baseAltitudeKm: 8.5,
+})
+assert.equal(clearCloudReturn, 1, 'Clear air must not alter artificial radiance')
+assert.equal(exactCloudReturn, exactCloudReturnFormula, 'Cloud return must implement the documented formula exactly')
+assert(saturatedCloudReturn <= 1.8 && saturatedCloudReturn > 1.799999,
+  'The urban cloud return must saturate at, but never exceed, 1.8')
+assert(thinHighCloudReturn - 1 < 0.001,
+  'Optically thin high cirrus must have negligible urban-return enhancement')
+assertStrictlyIncreasing(
+  [0.2, 0.6, 1].map((coverage) =>
+    lowCloudUrbanReturnEnhancement({ coverage, opticalDepth: 15, baseAltitudeKm: 0.8 })),
+  'Cloud return must increase with coverage',
+)
+assertStrictlyIncreasing(
+  [0, 0.25, 3, 15].map((opticalDepth) =>
+    lowCloudUrbanReturnEnhancement({ coverage: 1, opticalDepth, baseAltitudeKm: 0.8 })),
+  'Cloud return must increase with optical depth',
+)
+assertStrictlyIncreasing(
+  [8.5, 0.8, 0.4].map((baseAltitudeKm) =>
+    lowCloudUrbanReturnEnhancement({ coverage: 1, opticalDepth: 15, baseAltitudeKm })),
+  'Cloud return must increase as the deck becomes lower',
+)
 
 const emissionStarted = performance.now()
 const regionalGrid = buildEmissionGrid({ observer, sources: regionalSources })
@@ -298,6 +342,12 @@ const result = {
     renderElevationRows: renderFixture.elevationDeg.length,
     adaptiveRenderElevationRows: adaptiveRenderFixture.elevationDeg.length,
     renderHorizonStepDeg: maximumElevationStep(renderFixture.elevationDeg, 0, 10),
+    lowCloudUrbanReturn: {
+      clear: clearCloudReturn,
+      exactFixture: exactCloudReturn,
+      thinHighCirrus: thinHighCloudReturn,
+      saturated: saturatedCloudReturn,
+    },
   },
   resources: {
     fftPlanMiB: planBytes / 2 ** 20,
@@ -538,6 +588,10 @@ function assertFiniteNonNegative(values: Float32Array, label: string) {
   for (let index = 0; index < values.length; index += 1) {
     assert(Number.isFinite(values[index]) && values[index] >= 0, `${label} contains an invalid value at ${index}`)
   }
+}
+
+function assertStrictlyIncreasing(values: readonly number[], message: string) {
+  assert(values.every((value, index) => index === 0 || value > values[index - 1]), message)
 }
 
 function elevationInterpolationErrors(nodes: readonly number[]) {

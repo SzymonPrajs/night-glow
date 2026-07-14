@@ -83,8 +83,10 @@ elevations start at 0, 0.125, and 0.25 degrees, then expand progressively to
 15-degree zenith intervals. Lookups use trilinear interpolation and azimuthal
 symmetry.
 
-`atmosphericKernelCacheKey` hashes all atmosphere, grid, band, and transfer
-settings. `serializeAtmosphericKernel` and `deserializeAtmosphericKernel` allow
+`atmosphericKernelCacheKey` hashes the explicit numerical-model revision plus
+all atmosphere, grid, band, and transfer settings. Bump
+`ATMOSPHERIC_KERNEL_MODEL_REVISION` whenever kernel-producing maths changes;
+this also cache-busts the shipped preset-asset URLs. `serializeAtmosphericKernel` and `deserializeAtmosphericKernel` allow
 the result to be persisted in IndexedDB or transferred from a worker. The
 builder's `onProgress(completed, total)` callback is suitable for the analysis
 progress bar.

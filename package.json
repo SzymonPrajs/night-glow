@@ -7,10 +7,14 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "catalog:stars": "node scripts/download-star-catalog.mjs",
+    "precompute:weather": "tsx scripts/precompute-weather-kernels.ts",
     "lint": "eslint .",
     "preview": "vite preview",
     "test:appearance": "tsx scripts/verify-realistic-appearance.ts",
+    "test:calibration": "tsx scripts/verify-regional-calibration.ts",
     "test:physics": "tsx scripts/verify-physical-model.ts",
+    "test:weather": "tsx scripts/verify-weather-presets.ts",
+    "test:weather:regional": "node --expose-gc --import tsx scripts/verify-regional-weather-output.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {

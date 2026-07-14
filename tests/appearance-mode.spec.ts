@@ -4,6 +4,7 @@ const APPEARANCE_STORAGE_KEY = 'night-glow:appearance-mode'
 
 test('changes only sky presentation without changing physical stars, metrics, or glow', async ({ page }) => {
   test.setTimeout(45_000)
+  await preparePage(page)
   await page.goto('/')
 
   const shell = page.locator('.app-shell')
@@ -57,6 +58,7 @@ test('changes only sky presentation without changing physical stars, metrics, or
 })
 
 test('falls back to Realistic when persisted appearance data is malformed', async ({ page }) => {
+  await preparePage(page)
   await page.addInitScript(({ key }) => {
     localStorage.setItem(key, 'oversaturated-neon')
   }, { key: APPEARANCE_STORAGE_KEY })
@@ -72,4 +74,26 @@ async function settleRendering(page: Page) {
   await page.evaluate(() => new Promise<void>((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
   }))
+}
+
+async function preparePage(page: Page) {
+  await page.setViewportSize({ width: 960, height: 640 })
+  await page.addInitScript(() => {
+    let nextFrameId = 1
+    const timers = new Map<number, number>()
+    window.requestAnimationFrame = (callback: FrameRequestCallback) => {
+      const id = nextFrameId++
+      const timer = window.setTimeout(() => {
+        timers.delete(id)
+        callback(performance.now())
+      }, 100)
+      timers.set(id, timer)
+      return id
+    }
+    window.cancelAnimationFrame = (id: number) => {
+      const timer = timers.get(id)
+      if (timer !== undefined) window.clearTimeout(timer)
+      timers.delete(id)
+    }
+  })
 }

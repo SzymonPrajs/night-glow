@@ -5,7 +5,6 @@ import {
   DEFAULT_SETTLEMENT_PROXY_CALIBRATION,
   POLAR_RINGS,
   SECTOR_COUNT,
-  SPECTRAL_BANDS,
 } from '../src/lib/emission'
 import {
   buildAtmosphericKernel,
@@ -14,6 +13,13 @@ import {
   createRingEmissionField,
 } from '../src/lib/physics'
 import { NATURAL_SKY_LUMINANCE } from '../src/lib/appearance'
+import {
+  PRECOMPUTED_WEATHER_KERNEL_BANDS,
+  PRECOMPUTED_WEATHER_KERNEL_GRID,
+  precomputedWeatherAtmosphereInput,
+  precomputedWeatherTransferOptions,
+} from '../src/lib/precomputedWeatherKernels'
+import { WEATHER_PRESETS } from '../src/lib/weatherPresets'
 
 const MAXIMUM_ANCHOR_ERROR_MAG = 0.25
 const MAXIMUM_RMS_ERROR_MAG = 0.2
@@ -26,6 +32,9 @@ const ANCHORS = [
   { name: 'Łódź centre', lat: 51.7592, lon: 19.4560, targetSqm: 18.096 },
   { name: 'Warsaw centre', lat: 52.2297, lon: 21.0122, targetSqm: 17.551 },
 ] as const
+const typicalPreset = WEATHER_PRESETS.find((preset) => preset.id === 'typical')
+assert(typicalPreset, 'The shipped weather scenarios must include Typical clear')
+const bands = PRECOMPUTED_WEATHER_KERNEL_BANDS
 
 const sources = createRegionalSettlementSources()
 const fields = ANCHORS.map((observer) => {
@@ -35,38 +44,27 @@ const fields = ANCHORS.map((observer) => {
   return createRingEmissionField(
     POLAR_RINGS.map((ring) => ring.midpointKm),
     SECTOR_COUNT,
-    SPECTRAL_BANDS.map((band) => band.id),
+    bands.map((band) => band.id),
     emission.values,
     180 / SECTOR_COUNT,
   )
 })
 
-const kernel = buildAtmosphericKernel({
-  aerosolOpticalDepth550: 0.14,
-  angstromExponent: 1.3,
-  aerosolScaleHeightKm: 1.4,
-  aerosolSingleScatteringAlbedo: 0.92,
-  aerosolAsymmetry: 0.68,
-  relativeHumidity: 0.5,
-  groundAlbedo: 0.14,
-  cloud: { coverage: 0, baseAltitudeKm: 6.5, thicknessKm: 1.8, opticalDepth: 0 },
-}, undefined, {
-  bands: SPECTRAL_BANDS,
-  atmosphereTopKm: 60,
-  multipleScattering: {
-    maxOrders: 3,
-    tolerance: 0.01,
-    maxContinuationRatio: 0.92,
-    closeTruncatedTail: true,
+const kernel = buildAtmosphericKernel(
+  precomputedWeatherAtmosphereInput(typicalPreset.values),
+  PRECOMPUTED_WEATHER_KERNEL_GRID,
+  {
+    ...precomputedWeatherTransferOptions(typicalPreset),
+    bands,
   },
-})
+)
 const plan = createRingConvolutionPlan(kernel, fields[0].ringDistancesKm, fields[0].sectorCount)
-const results = fields.map((field, index) => {
-  const sky = convolveRingEmissionField(kernel, field, undefined, plan)
+const skies = fields.map((field) => convolveRingEmissionField(kernel, field, undefined, plan))
+const results = skies.map((sky, index) => {
   const artificialLuminance = zenithLuminance(
     sky.radiance,
     sky.elevationsDeg.length - 1,
-    field.sectorCount,
+    fields[index].sectorCount,
   )
   const predictedSqm = 21.92 - 2.5 * Math.log10(
     1 + artificialLuminance / NATURAL_SKY_LUMINANCE,
@@ -82,6 +80,16 @@ const results = fields.map((field, index) => {
   }
 })
 
+const zapoliceSky = skies[0]
+const zapoliceLodzHorizonSqm = sqmFromArtificialLuminance(
+  directionalLuminance(zapoliceSky, 0, 55),
+)
+const zapoliceOppositeHorizonSqm = sqmFromArtificialLuminance(
+  directionalLuminance(zapoliceSky, 0, 235),
+)
+assert(zapoliceLodzHorizonSqm < zapoliceOppositeHorizonSqm - 2,
+  'The calibrated Zapolice horizon must be materially brighter toward Łódź than opposite it')
+
 const rmsErrorMag = Math.sqrt(
   results.reduce((sum, result) => sum + result.errorMag ** 2, 0) / results.length,
 )
@@ -90,9 +98,16 @@ assert(rmsErrorMag <= MAXIMUM_RMS_ERROR_MAG,
 
 console.log(JSON.stringify({
   calibration: DEFAULT_SETTLEMENT_PROXY_CALIBRATION,
-  atmosphere: 'typical-clear-aod-0.14-rh-0.50-cloud-0',
+  atmosphere: 'shipped-typical-clear',
   maximumAnchorErrorMag: Math.max(...results.map((result) => Math.abs(result.errorMag))),
   rmsErrorMag,
+  zapoliceDirectionality: {
+    lodzBearingDeg: 55,
+    lodzHorizonSqm: zapoliceLodzHorizonSqm,
+    oppositeBearingDeg: 235,
+    oppositeHorizonSqm: zapoliceOppositeHorizonSqm,
+    contrastMag: zapoliceOppositeHorizonSqm - zapoliceLodzHorizonSqm,
+  },
   anchors: results,
 }, null, 2))
 
@@ -103,14 +118,37 @@ function zenithLuminance(
 ) {
   let luminance = 0
   for (let azimuth = 0; azimuth < azimuthCount; azimuth += 1) {
-    const base = (elevationIndex * azimuthCount + azimuth) * SPECTRAL_BANDS.length
-    for (let band = 0; band < SPECTRAL_BANDS.length; band += 1) {
-      const [red, green, blue] = wavelengthToLinearRgb(SPECTRAL_BANDS[band].wavelengthNm)
+    const base = (elevationIndex * azimuthCount + azimuth) * bands.length
+    for (let band = 0; band < bands.length; band += 1) {
+      const [red, green, blue] = wavelengthToLinearRgb(bands[band].wavelengthNm)
       luminance += radiance[base + band] *
         (0.2126 * red + 0.7152 * green + 0.0722 * blue) / azimuthCount
     }
   }
   return luminance
+}
+
+function directionalLuminance(
+  sky: ReturnType<typeof convolveRingEmissionField>,
+  elevationIndex: number,
+  bearingDeg: number,
+) {
+  const sector = Math.round(
+    ((bearingDeg - sky.azimuthsDeg[0] + 360) % 360) /
+    (360 / sky.azimuthsDeg.length),
+  ) % sky.azimuthsDeg.length
+  const base = (elevationIndex * sky.azimuthsDeg.length + sector) * bands.length
+  let luminance = 0
+  for (let band = 0; band < bands.length; band += 1) {
+    const [red, green, blue] = wavelengthToLinearRgb(bands[band].wavelengthNm)
+    luminance += sky.radiance[base + band] *
+      (0.2126 * red + 0.7152 * green + 0.0722 * blue)
+  }
+  return luminance
+}
+
+function sqmFromArtificialLuminance(artificialLuminance: number) {
+  return 21.92 - 2.5 * Math.log10(1 + artificialLuminance / NATURAL_SKY_LUMINANCE)
 }
 
 // Keep this transform identical to the worker's spectral display matrix because

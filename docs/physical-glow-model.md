@@ -14,7 +14,7 @@ positive zero-padded FFT circular convolution
 3-D glow mesh + directional stars, Milky Way, planets, and deep sky
 ```
 
-All geographical distances are kilometres. Bearings are clockwise from north. Emission is currently a relative radiant-flux proxy rather than calibrated watts, so the spatial and radiative-transfer calculations are quantitative relative to the supplied inventory. SQM, Bortle, RGB, and naked-eye values are heuristic display indices, not photometric predictions.
+All geographical distances are kilometres. Bearings are clockwise from north. Emission is a central-Poland-calibrated relative radiant-flux proxy rather than calibrated watts. The spatial and radiative-transfer calculations are quantitative relative to the supplied inventory, while SQM, Bortle, RGB, and naked-eye values remain model indices rather than predictive photometry.
 
 ## 1. Conserved spectral source grid
 
@@ -62,13 +62,34 @@ The default spacing is 0.5 km with a maximum of 4096 samples per source. The wei
 
 ## 2. Regional settlement totals
 
-For bundled settlement \(p\), the relative upward-flux total is
+For bundled settlement \(p\), first define an equivalent lit area
 
 \[
-\Phi_p=c I_p\left(0.72A_p+0.28\frac{P_p}{3200}\right),
+E_p=0.72A_p+0.28\frac{P_p}{3200},
 \]
 
-where \(A_p\) is proxy built area in km², \(P_p\) is proxy population, \(I_p\) is a lighting-intensity factor, and \(c\) is configurable flux per equivalent lit km². The default mixed sodium/white-LED band fractions are
+where \(A_p\) is proxy built area in km² and \(P_p\) is proxy population. The calibrated relative upward-flux total is
+
+\[
+\Phi_p=11.5\,I_p E_p\left(\frac{E_p}{100\ \mathrm{km^2}}\right)^{0.30}.
+\]
+
+Here \(I_p\) is a lighting-intensity factor. The 1.30 total exponent captures the observed super-linear growth between small settlements and the much brighter cores of Łódź and Warsaw; it does not assert a universal urban scaling law. A purely linear multiplier can match rural central Poland or the large-city centres, but not both simultaneously.
+
+The two free scale terms were fitted under the **Typical clear** atmosphere (AOD 0.14, relative humidity 0.50, no cloud) to four zenith anchors from the 2015 World Atlas clear-sky model. `npm run test:calibration` independently rebuilds the full source grid and transfer field at every site:
+
+| Observer | Atlas anchor | Predicted | Error |
+|---|---:|---:|---:|
+| Zapolice | 21.279 | 21.173 | -0.106 mag |
+| Łowicz | 20.477 | 20.387 | -0.090 mag |
+| Łódź centre | 18.096 | 18.246 | +0.150 mag |
+| Warsaw centre | 17.551 | 17.437 | -0.114 mag |
+
+The RMS error is 0.117 mag and the largest error is 0.150 mag. These anchors are appropriate for spatial calibration, but they are not local measurements at the exact date and weather selected in the app. As an independent reality check, the long-term Warsaw survey reported a darkest cloudless/moonless astronomical zenith of 18.65 ± 0.06 mag/arcsec² at its monitoring site and a 17.16 median across astronomical-night weather. This difference is expected: the app's Warsaw anchor is the brighter city centre, while real nights vary strongly with site, cloud, aerosol, snow, lighting, and time.
+
+Sources: [World Atlas paper](https://doi.org/10.1126/sciadv.1600377), [World Atlas dataset](https://doi.org/10.5880/GFZ.1.4.2016.001), [Warsaw long-term survey](https://doi.org/10.1016/j.jqsrt.2019.06.024).
+
+The default mixed sodium/white-LED band fractions are
 
 \[
 (0.055,0.090,0.115,0.145,0.170,0.210,0.130,0.085).
@@ -88,7 +109,7 @@ L^{(1)}_\lambda(\hat v)=
 \frac{U(\mu_s)}{r_s^2+r_0^2}
 \exp[-\tau_\lambda(s\rightarrow x)-\tau_\lambda(x\rightarrow o)]
 \left[
-\beta_R p_R+eta_a\omega_a p_a+eta_c\omega_c p_c
+\beta_R p_R+\beta_a\omega_a p_a+\beta_c\omega_c p_c
 \right]\,d\ell.
 \]
 
@@ -134,6 +155,41 @@ Aerosol density is exponential with a user-controlled scale height. Scattering u
 ### Cloud and surface loop
 
 Cloud cover is a horizontally uniform unresolved mean column through a spherical shell, effectively coverage multiplied into its extinction/scattering column. It is not patchy 3-D cloud geometry. The phase function mixes a forward HG lobe with an isotropic internal-scattering term. Low cloud can therefore return more urban light, while a thick intervening cloud also extinguishes distant light. Ground albedo appears only in the empirical cloud/ground feedback; there is no clear-sky surface-reflection path.
+
+The reduced unit-source geometry misses part of the broad city-to-deck-to-ground return measured over polluted cities. A bounded empirical closure therefore multiplies only the final artificial-light radiance:
+
+\[
+F_{\rm low\ cloud}=1+0.8C\left(1-e^{-\tau_c/3}\right)e^{-h_b/(2\ {\rm km})},
+\qquad 1\le F_{\rm low\ cloud}\le1.8,
+\]
+
+where \(h_b\) is cloud-base altitude. The term is exactly one in clear air, rises monotonically with cover and optical depth, and decays rapidly with cloud height. It leaves first-order diagnostics, the multiple-scattering continuation, natural sky, and direct celestial transmission unchanged. On the exact shipped worker grid at Warsaw centre, Typical clear is 17.437 SQM; Low overcast is 15.308 SQM (7.10× total brightness) and Snow overcast is 15.100 SQM (8.61×). This intentionally matches the observed order of polluted-site overcast amplification—about 7× in the long-term Warsaw survey and commonly 6–10× in the Poland report—without assigning an implausible ground albedo to the ordinary low-overcast case. It remains a regional empirical closure, not resolved 3-D cloud transport. Sources: [Warsaw survey](https://doi.org/10.1016/j.jqsrt.2019.06.024), [Light Pollution in Poland report](https://lptt.org.pl/zasoby/lptt_report_2023_eng.pdf).
+
+The same unresolved-cover interpretation now attenuates direct celestial objects. For cloud fraction \(C\), optical depth \(\tau_c\), and relative air mass \(X(h)\) at object altitude \(h\),
+
+\[
+T_{\rm direct}(h)=(1-C)+C\exp[-\tau_c X(h)],\qquad
+A_{\rm cloud}(h)=-2.5\log_{10}T_{\rm direct}(h).
+\]
+
+This extinction is applied consistently to stars, visible-star counts, the summary limit, the Milky Way, deep-sky objects, planets, Moon, and Sun. It increases toward the horizon. Fully opaque overcast therefore removes direct stars instead of displaying thousands of catalogue objects on top of a bright cloud deck; broken cloud retains the unresolved clear fraction.
+
+### Shipped weather scenarios
+
+The preset gallery changes physical atmosphere inputs, never numerical accuracy: all eight presets use four explicit scattering orders and the same bounded tail closure.
+
+| Preset | Intended central-European scenario |
+|---|---|
+| Crisp clear | AOD 0.04, dry air, exceptional transparency |
+| Typical clear | AOD 0.14, 50% RH, cloudless regional baseline |
+| Humid | Moist air with a small low-cloud fraction |
+| Winter smog | AOD 0.40 in a shallow fine-aerosol inversion |
+| Thin cirrus | 65% high veil with optical depth 0.25 |
+| Broken low cloud | 55% cover, 1 km base, optical depth 6 |
+| Low overcast | Fully covered 0.8 km deck, optical depth 15 |
+| Snow overcast | The same opaque low deck over 0.65 ground albedo |
+
+Poland-wide aerosol studies place long-term mean AOD550 around 0.14–0.17, which motivates the Typical clear reference; individual episodes can be far cleaner or much more polluted. Cirrus optical depth below about 0.3 motivates the thin-veil scenario. The cloud presets are controlled sensitivity cases rather than forecasts or claims of one universal cloud response. Sources: [Poland AOD climatology](https://doi.org/10.3390/atmos12121583), [thin-cirrus optical depth study](https://doi.org/10.5194/amt-17-1197-2024).
 
 ## 4. Bounded multiple scattering
 
@@ -190,7 +246,7 @@ O\!\left(RBF\log F+EB\left(RF+F\log F\right)\right),
 
 where \(R\) is rings, \(B\) bands, \(E\) elevations, and \(N\) bearings. There is no low-harmonic truncation. Both source power and sampled kernels are non-negative, so this construction cannot create detached Gibbs side lobes; only round-off-sized negative values are clamped. Angular-mean conservation is checked numerically.
 
-Kernel keys hash atmosphere, transfer options, bands, and sampling grid. Plan keys additionally hash ring layout, elevation list, and sector count. Exact repeats reuse both. The 22-row kernel is about 0.79 MiB and its 720-bearing FFT plan is 111.5 MiB; the worker retains only one plan and evicts it before allocating a replacement. Serialization/deserialization is implemented for optional persistent kernel precomputation, while the large derived FFT plan remains a runtime cache.
+Kernel keys hash an explicit numerical-model revision together with atmosphere, transfer options, bands, and sampling grid. The revision must be bumped whenever kernel-producing maths changes and is included in preset-asset URLs, preventing a same-sized binary from a previous deployment being accepted from the HTTP cache. Plan keys additionally hash ring layout, elevation list, and sector count. Exact repeats reuse both. Each shipped weather preset has a generated 183,040-value Float32 kernel (715 KiB); the eight lazy assets total 5.59 MiB. `npm run precompute:weather` rebuilds them in parallel from the same audited TypeScript transfer code. Assets are length-checked and finite/non-negative-tested before use; a missing or invalid asset falls back to the live solver. Custom settings always use that live path. The 720-bearing FFT plan is 111.5 MiB, remains a runtime cache, and is limited to one active atmosphere so replacement cannot briefly double its memory.
 
 Aggregate distance, source-layer, and field diagnostics do not average the 22 rows equally. With \(u_i=\sin(e_i)\), normalized trapezoid weights are
 
@@ -256,9 +312,9 @@ The gain approaches 1.6 for faint signals and rolls smoothly back to one at a un
 
 ## 7. Worker, caches, and real progress
 
-All expensive atmospheric work runs in a module Web Worker. Typed-array buffers are transferred rather than cloned. Kernel construction yields every 128 unit-source cells so a superseding slider message can stop stale work after roughly one small batch. Rapid changes are also debounced; only a completed result confirms that an emission grid is safe to reference by cache key.
+All expensive atmospheric work runs in a module Web Worker. Typed-array buffers are transferred rather than cloned. Kernel construction yields every 128 unit-source cells so a superseding slider message can stop stale work after roughly one small batch. Rapid changes are also debounced. An inline emission grid is committed to the worker LRU only after a complete result is posted, and only that result lets the hook issue later cache-only requests; cancelled work therefore cannot silently evict a grid which the hook still considers confirmed.
 
-Caches are bounded least-recently-used maps: three emission grids, four atmosphere kernels, and one Fourier plan. Evicting a kernel also removes its dependent plan, and the previous plan is evicted before replacement allocation to avoid a two-plan memory spike.
+Caches are bounded least-recently-used maps: three emission grids, eight compact atmosphere kernels (one for every shipped weather preset), and one Fourier plan. Evicting a kernel also removes its dependent plan, and the previous plan is evicted before replacement allocation to avoid a two-plan memory spike. Once a source grid has completed one worker solve, a weather-only change sends its cache key and skips the main-thread geometry integration entirely; the progress panel marks Source grid as reused. A location change still performs and reports the real integration.
 
 The visible overall progress is the physical solver's directly reported progress. Its normalized component weights are:
 
@@ -269,32 +325,34 @@ The visible overall progress is the physical solver's directly reported progress
 | Sky convolution and spectral conversion | 8% |
 | Conservation/boundary diagnostics | 4% |
 
-Kernel progress is the actual completed count of unit-source paths, throttled to about 30 updates per second rather than a timer animation. The hook enforces monotonic progress within one request. The panel also reports every component separately, source-layer and distance contributions, the modeled share from 300–1000 km, and measured grid/kernel/sky/check timings. The internal outermost-100-km value is explicitly a boundary-sensitivity indicator, not a convergence error or estimate of omitted light.
+Kernel progress is the actual completed count of unit-source paths, throttled to about 30 updates per second rather than a timer animation. The hook enforces monotonic progress within one request. A compact live bar remains visible beside the weather presets, while the analysis drawer reports every component separately, source-layer and distance contributions, the modeled share from 300–1000 km, and measured grid/kernel/sky/check timings. The internal outermost-100-km value is explicitly a boundary-sensitivity indicator, not a convergence error or estimate of omitted light.
 
-On the development machine, `npm run test:physics` currently measures approximately:
+On the development machine, direct Node verification and a normal Chromium run currently measure approximately:
 
 | Stage | Time |
 |---|---:|
-| Regional grid integration | 25–45 ms |
-| New 22-row atmospheric kernel | 2.2–2.9 s |
-| New 22-row Fourier plan | 0.5–0.7 s |
-| Cached 81 × 720 × 22 × 8 convolution | 80–110 ms |
+| Regional grid integration | 0.15–0.45 s |
+| Live Custom 22-row atmosphere kernel in Chromium | 25–30 s |
+| Load exact precomputed preset kernel | under 0.1 s locally |
+| New 720-bearing Fourier plan in Chromium | 4–5 s |
+| 81 × 720 × 22 × 8 convolution and diagnostics in Chromium | about 1 s |
 
-The kernel and FFT plan are the only material initial costs; both run off the main thread and are cached. Panning, zooming, and time changes only move/rebuild the sky scene and do not recompute atmospheric transport. Cached location updates solve in roughly a tenth of a second without blocking interaction. A Rust/Wasm implementation would add a boundary and duplicate numerical code for work already isolated from the render loop, so the implementation keeps the solver in auditable TypeScript for now. The star catalogue is emitted as its own production chunk.
+Preset kernels remove the dominant initial path-integration cost; the FFT plan and convolution still run off the main thread with genuine progress. Panning, zooming, and time changes only move/rebuild the sky scene and do not recompute atmospheric transport. Custom settings retain the slower auditable live solve, including cancellation and progress. The eight preset assets are generated with up to four Node workers in about 23 seconds, while the browser runtime stays in TypeScript rather than adding a second Rust/Wasm numerical implementation. The star catalogue is emitted as its own production chunk.
 
 ## 8. Verification
 
-`npm run test:physics` checks conservation, finite/non-negative output, linearity, rotational invariance, long-range scattering, direction, angular extent, adaptive-grid error, solid-angle quadrature, FFT-plan memory, and cached-solve latency. At observer `51.5329° N, 18.9390° E`, the current deterministic result is:
+`npm run test:physics` checks conservation, finite/non-negative output, linearity, rotational invariance, long-range scattering, direction, angular extent, adaptive-grid error, solid-angle quadrature, FFT-plan memory, and cached-solve latency. `npm run test:calibration` locks the four-site values above. At observer `51.5329° N, 18.9390° E`, the current deterministic result is:
 
 - Łódź centre bearing: 54.598°.
 - Computed horizon-glow peak: 55.25°.
 - Integrated footprint: 1,552 quadrature samples across 59 sectors (29.5°) and 11 rings.
-- Łódź bandwise conservation error: \(3.60\times10^{-14}\).
-- Full regional-grid conservation error: \(5.92\times10^{-13}\).
+- Łódź bandwise conservation error: \(2.82\times10^{-14}\).
+- Full regional-grid conservation error: \(4.81\times10^{-13}\).
 - Linearity error: zero at Float32 output precision.
 - Rotation error after a 73-sector source rotation: about \(1.2\times10^{-9}\).
 - Independent north/east/south/west fixtures peak within 0.25° of their cardinal directions.
-- In the complete regional field, the 40–70° Łódź lobe is about 960 times the opposite 220–250° lobe for this observer.
+- In the complete regional field, the 40–70° Łódź lobe is about 1,061 times the opposite 220–250° lobe for this observer.
+- On the shipped Typical-clear calibration grid, the 55° horizon is 16.031 SQM versus 21.802 SQM at 235°, a 5.771 mag directional contrast.
 - A synthetic bright city at 600 km retains finite modeled radiance at 20° elevation.
 - The asynchronous kernel builder demonstrably stops after a superseding cancellation check.
 - Adaptive 0–10° interpolation is 0.62% RMS and 0.88% at p95 against dense transfer evaluations.
@@ -305,9 +363,11 @@ The kernel and FFT plan are the only material initial costs; both run off the ma
 
 `npm run test:appearance` checks the Realistic sky-response anchors, bounded 1.6× stellar display lift, shared Atlas/Realistic visibility support, magnitude law, integral-normalized PSF, stellar chroma, sprite size, and atmosphere-dependent dispersion. The appearance E2E case verifies accessible keyboard selection and persistence, requires the complete summary and solver result to remain identical across modes, and confirms that the canvas presentation still changes.
 
+`npm run test:weather` validates all twelve fields and UI bounds for every preset, rebuilds all eight full shipped kernels and requires bit-for-bit parity with their binary assets, keeps numerical solver order fixed, and checks the exact direct-cloud transmission law. `npm run test:weather:regional` runs all eight full-resolution Warsaw fields with one bounded FFT plan at a time; it locks Typical clear to its anchor and polluted low/snow overcast to the measured 6–10× range. The browser companion confirms that Presets is the primary view, Custom is secondary and keyboard-operable, a preset change produces observable visible progress, daylight is not labeled Bortle, and moonless Warsaw moves from approximately 17.44 SQM / +5.0 / 402 stars when clear to about 15.3 SQM / +0.0 / zero stars under low overcast. A separate worker regression cancels both inline and cache-hit source analyses and proves that neither path can desynchronize the main-thread and worker LRU order.
+
 ## 9. Limitations
 
-- Conservation proves that supplied proxy totals are neither lost nor duplicated. It does not prove that those totals are calibrated watts or measured upward radiance.
+- Conservation proves that supplied proxy totals are neither lost nor duplicated. The four-site fit constrains central-Poland clear-sky zenith contrast, but does not turn those totals into calibrated watts or measured upward radiance.
 - Bundled settlement populations, built areas, lighting factors, spectra, and ellipses are rounded regional proxies.
 - The mixed eight-band spectrum does not yet infer local lamp technology, curfew, operating schedule, snow response, or wavelength-dependent upward-emission functions.
 - Geometry is uniformly emissive within each settlement ellipse. Results are quantized by quadrature spacing, the 4096-sample cap, rings, and half-degree sectors.
@@ -316,5 +376,6 @@ The kernel and FFT plan are the only material initial costs; both run off the ma
 - Rays are straight and unrefracted on a spherical Earth. The live solve uses a 60 km atmosphere top and fixed 0.15 km source/observer altitude.
 - Terrain, buildings, vegetation screening, resolved three-dimensional clouds, vertical weather soundings, polarization, ozone absorption, and within-band spectral lines are not modeled.
 - Multiple scattering is a scalar bounded closure that preserves the first-order angular pattern, not a full 3-D Monte Carlo solution.
+- The low-cloud urban-return factor is a bounded central-Poland calibration of unresolved artificial-light return. It does not predict individual cloud cells, precipitation, fog, or every rural cloud response.
 - Natural airglow, zodiacal light, moonlight, twilight, stars, and the Milky Way are outside the artificial-glow transfer solve and are added with separate rendering heuristics.
-- RGB, SQM, Bortle, and limiting magnitude are heuristic transforms of relative radiance. A measured upward-radiance inventory and local SQM calibration are required for predictive photometry.
+- RGB, SQM, Bortle, and limiting magnitude are heuristic transforms of relative radiance. Bortle labels are meaningful only during astronomical darkness; twilight/daylight frames must not be compared to clear-night survey values. A measured upward-radiance inventory, terrain, resolved weather, and local SQM calibration are required for predictive photometry.
