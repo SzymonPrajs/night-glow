@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { BRIGHT_STARS, DEEP_SKY } from '../data/celestial'
 import { STAR_CATALOG } from '../data/starCatalog'
 import { equatorialToHorizontal, galacticToEquatorial, horizontalVector, type HorizontalObject } from '../lib/astronomy'
-import { APPEARANCE_PROFILES, realisticGlowRgb, realisticVisualLimit } from '../lib/appearance'
+import { APPEARANCE_PROFILES, realisticGlowRgb } from '../lib/appearance'
 import { physicalZenithSample, samplePhysicalGlow } from '../lib/physicalGlowField'
 import type { PhysicalGlowResult } from '../lib/physicalGlowProtocol'
 import { buildPhysicalGlowRenderGrid } from '../lib/physicalGlowRender'
@@ -149,6 +149,7 @@ const starFragmentShader = `
   varying float vHaloStrength;
   varying float vDispersion;
   uniform float uRealistic;
+  uniform float uRealisticStarGain;
   ${colorSpaceShader}
   float gaussian(float radius, float sigma) {
     return exp(-0.5 * radius * radius / max(sigma * sigma, 0.0001));
@@ -163,8 +164,10 @@ const starFragmentShader = `
     float intensity = max(profile.r, max(profile.g, profile.b));
     if (uRealistic > 0.5) {
       vec3 signal = profile * vOpacity;
+      float peak = max(signal.r, max(signal.g, signal.b));
+      signal *= uRealisticStarGain / (1.0 + (uRealisticStarGain - 1.0) * peak);
       if (max(signal.r, max(signal.g, signal.b)) < 0.00025) discard;
-      gl_FragColor = vec4(signal, 1.0);
+      gl_FragColor = vec4(linearToSrgb(signal), 1.0);
       return;
     }
     if (intensity < .002 || vOpacity <= 0.0) discard;
@@ -430,7 +433,6 @@ function rebuildStars(
       directionalLimit,
       atmosphere,
       appearanceMode,
-      metrics.zenithMag,
     )
     positions.push(vector.x, vector.y, vector.z)
     colors.push(appearance.color.r, appearance.color.g, appearance.color.b)
@@ -459,10 +461,7 @@ function rebuildStars(
     const localLimit = glowField
       ? samplePhysicalGlow(glowField, horizontal.azimuth, horizontal.altitude).limitingMagnitude - globalLightPenalty
       : metrics.limitingMagnitude
-    const labelLimit = appearanceMode === 'realistic'
-      ? Math.min(localLimit, realisticVisualLimit(metrics.zenithMag))
-      : localLimit
-    if (apparentStarMagnitude(star, horizontal.altitude, atmosphere) >= labelLimit) continue
+    if (apparentStarMagnitude(star, horizontal.altitude, atmosphere) >= localLimit) continue
     const vector = horizontalVector(horizontal.azimuth, horizontal.altitude, 96)
     const label = makeLabel(
       `${star.name}  ·  ${star.constellation}`,
@@ -496,9 +495,7 @@ function rebuildMilkyWay(
     const localLimit = glowField
       ? samplePhysicalGlow(glowField, horizontal.azimuth, horizontal.altitude).limitingMagnitude - globalLightPenalty
       : metrics.limitingMagnitude
-    const visibility = appearanceMode === 'realistic'
-      ? clamp((Math.min(localLimit, realisticVisualLimit(metrics.zenithMag)) - 5.55) / 0.85, 0, 1) * (1 - atmosphere.cloud * 0.9)
-      : clamp((localLimit - 4.55) / 2.2, 0, 1) * (1 - atmosphere.cloud * 0.86)
+    const visibility = clamp((localLimit - 4.55) / 2.2, 0, 1) * (1 - atmosphere.cloud * 0.86)
     if (visibility < 0.025) continue
     const vector = horizontalVector(horizontal.azimuth, horizontal.altitude, 108)
     positions.push(vector.x, vector.y, vector.z)
@@ -527,9 +524,7 @@ function rebuildDeepSky(
   clearGroup(refs.deepGroup)
   const globalLightPenalty = directionalLightPenalty(glowField, metrics)
   for (const object of DEEP_SKY) {
-    const required = appearanceMode === 'realistic'
-      ? object.kind === 'cluster' ? object.mag + 0.25 : object.mag + 2
-      : object.kind === 'cluster' ? object.mag - 0.6 : object.mag + 1.25
+    const required = object.kind === 'cluster' ? object.mag - 0.6 : object.mag + 1.25
     const horizontal = equatorialToHorizontal(object.ra, object.dec, date, location)
     if (horizontal.altitude < 1) continue
     const localLimit = glowField
@@ -549,8 +544,7 @@ function rebuildDeepSky(
     )
     sprite.position.set(vector.x, vector.y, vector.z)
     refs.deepGroup.add(sprite)
-    if ((appearanceMode === 'atlas' && (localLimit > 5.1 || object.mag < 4.2)) ||
-        (appearanceMode === 'realistic' && object.mag < 3 && localLimit > required + 0.5)) {
+    if (localLimit > 5.1 || object.mag < 4.2) {
       const label = makeLabel(
         `${object.catalog}  ${object.name}`,
         color,
@@ -746,6 +740,7 @@ function makeStarMaterial(renderer: THREE.WebGLRenderer, appearanceMode: Appeara
     uniforms: {
       uPixelRatio: { value: Math.min(renderer.getPixelRatio(), 2) },
       uRealistic: { value: appearanceMode === 'realistic' ? 1 : 0 },
+      uRealisticStarGain: { value: APPEARANCE_PROFILES.realistic.starDisplayGain },
       uPixelsPerArcsecond: { value: 0.0036 },
     },
     vertexShader: starVertexShader,

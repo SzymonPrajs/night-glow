@@ -1,7 +1,6 @@
 import * as THREE from 'three'
 import type { CatalogStar } from '../data/starCatalog'
 import type { AppearanceMode, Atmosphere } from '../types'
-import { realisticVisualLimit } from './appearance'
 import { clamp } from './skyModel'
 
 export type StarAppearance = {
@@ -20,16 +19,15 @@ export function starAppearance(
   limitingMagnitude: number,
   atmosphere: Atmosphere,
   mode: AppearanceMode = 'atlas',
-  zenithMag = 21.92,
 ): StarAppearance {
+  const apparentMagnitude = apparentStarMagnitude(star, altitude, atmosphere)
+  const visibility = starVisibility(apparentMagnitude, limitingMagnitude)
   if (mode === 'realistic') {
-    return realisticStarAppearance(star, altitude, limitingMagnitude, atmosphere, zenithMag)
+    return realisticStarAppearance(star, altitude, atmosphere, apparentMagnitude, visibility)
   }
 
   const airMass = relativeAirMass(altitude)
   const extraColumn = Math.max(0, airMass - 1)
-  const apparentMagnitude = apparentStarMagnitude(star, altitude, atmosphere)
-  const visibility = clamp((limitingMagnitude - apparentMagnitude + 0.32) / 0.68, 0, 1)
   const flux = 10 ** (-0.4 * apparentMagnitude)
   const brightnessScale = clamp(flux ** 0.2, 0.22, 1.6)
   const seeing = 0.75 + atmosphere.aerosol * 0.65 + atmosphere.humidity * 0.35 + atmosphere.cloud * 0.55
@@ -64,15 +62,12 @@ export function starAppearance(
 function realisticStarAppearance(
   star: CatalogStar,
   altitude: number,
-  limitingMagnitude: number,
   atmosphere: Atmosphere,
-  zenithMag: number,
+  apparentMagnitude: number,
+  visibility: number,
 ): StarAppearance {
   const airMass = relativeAirMass(altitude)
   const extraColumn = Math.max(0, airMass - 1)
-  const apparentMagnitude = apparentStarMagnitude(star, altitude, atmosphere)
-  const effectiveLimit = Math.min(limitingMagnitude, realisticVisualLimit(zenithMag))
-  const visibility = smoothstep(-0.05, 0.5, effectiveLimit - apparentMagnitude)
   const peakIntensity = realisticStarPeak(apparentMagnitude)
 
   // At a wide naked-eye field the displayed core is sampling-limited. Seeing
@@ -116,6 +111,11 @@ export function apparentStarMagnitude(star: Pick<CatalogStar, 'mag'>, altitude: 
   const extraColumn = Math.max(0, relativeAirMass(altitude) - 1)
   const extinctionPerAirMass = 0.075 + atmosphere.aerosol * 0.24 + atmosphere.humidity * 0.1
   return star.mag + clamp(extraColumn * extinctionPerAirMass, 0, 3.5)
+}
+
+/** Shared physical selection/fade used by every presentation mode. */
+export function starVisibility(apparentMagnitude: number, limitingMagnitude: number) {
+  return clamp((limitingMagnitude - apparentMagnitude + 0.32) / 0.68, 0, 1)
 }
 
 function observedStarColor(

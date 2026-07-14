@@ -3,6 +3,7 @@ import type { AppearanceMode } from '../types'
 
 export type AppearanceProfile = {
   rendererExposure: number
+  starDisplayGain: number
   milkyWayOpacity: number
   deepSkyOpacity: number
   planetOpacity: number
@@ -11,12 +12,14 @@ export type AppearanceProfile = {
 export const APPEARANCE_PROFILES: Record<AppearanceMode, AppearanceProfile> = {
   atlas: {
     rendererExposure: 1.1,
+    starDisplayGain: 1,
     milkyWayOpacity: 0.24,
     deepSkyOpacity: 1,
     planetOpacity: 1,
   },
   realistic: {
     rendererExposure: 1,
+    starDisplayGain: 1.6,
     milkyWayOpacity: 0.045,
     deepSkyOpacity: 0.16,
     planetOpacity: 0.62,
@@ -58,9 +61,15 @@ export function rgbLuminance(rgb: ArrayLike<number>) {
   return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]
 }
 
-/** Empirical visual threshold used only to fade realistic sprites near detection. */
-export function realisticVisualLimit(zenithMag: number) {
-  return Math.max(0, Math.min(7.15, 7.15 - 0.8 * (21.92 - zenithMag)))
+/**
+ * Presentation-only lift for small, dim Realistic star sprites. The shoulder
+ * leaves a unit signal at one and avoids clipping bright stars while making
+ * subpixel points easier to perceive on an ordinary display.
+ */
+export function realisticStarDisplaySignal(signal: number) {
+  const safe = Number.isFinite(signal) ? Math.max(0, signal) : 0
+  const gain = APPEARANCE_PROFILES.realistic.starDisplayGain
+  return safe * gain / (1 + (gain - 1) * safe)
 }
 
 /**

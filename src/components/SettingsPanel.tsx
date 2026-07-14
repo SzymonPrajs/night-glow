@@ -13,8 +13,8 @@ const APPEARANCE_MODES: ReadonlyArray<{
   label: string
   description: string
 }> = [
-  { mode: 'realistic', label: 'Realistic', description: 'Natural brightness and low-light colour' },
-  { mode: 'atlas', label: 'Atlas', description: 'Enhanced visibility and object colour' },
+  { mode: 'realistic', label: 'Realistic', description: 'Natural rendering of the physical sky' },
+  { mode: 'atlas', label: 'Atlas', description: 'Same sky with amplified contrast' },
 ]
 
 const PRESETS: Array<{ name: string; values: Atmosphere }> = [

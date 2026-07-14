@@ -20,7 +20,6 @@ import SettingsPanel from './components/SettingsPanel'
 import SkyCanvas from './components/SkyCanvas'
 import { usePhysicalGlow, type PhysicalGlowAnalysisState } from './hooks/usePhysicalGlow'
 import { getSolarSystem } from './lib/astronomy'
-import { appearanceMetrics } from './lib/appearanceMetrics'
 import { calculatePhysicalSkyMetrics } from './lib/physicalGlowField'
 import { clamp } from './lib/skyModel'
 import type { AppearanceMode, Atmosphere, Location } from './types'
@@ -88,11 +87,6 @@ export default function App() {
     () => calculatePhysicalSkyMetrics(physicalGlow.result, date, location, atmosphere, sun?.altitude, moonLight),
     [physicalGlow.result, date, location, atmosphere, sun?.altitude, moonLight],
   )
-  const displayedMetrics = useMemo(
-    () => appearanceMetrics(appearanceMode, metrics, physicalGlow.result, date, location, atmosphere),
-    [appearanceMode, metrics, physicalGlow.result, date, location, atmosphere],
-  )
-
   const nudgeTime = (hours: number) => setDate((current) => new Date(current.getTime() + hours * 3_600_000))
   const direction = compassDirection(view.azimuth)
   const setMapPin = (pinned: boolean) => {
@@ -140,10 +134,10 @@ export default function App() {
         </div>
 
         <div className="sky-summary" aria-label="Sky visibility summary">
-          <SummaryMetric label="Bortle" value={`Class ${displayedMetrics.bortle}`} />
-          <SummaryMetric label="Sky quality" value={`${displayedMetrics.zenithMag.toFixed(2)} mag`} />
-          <SummaryMetric label="Naked-eye limit" value={`+${displayedMetrics.limitingMagnitude.toFixed(1)}`} />
-          <SummaryMetric label="Visible stars" value={`~${displayedMetrics.visibleStars.toLocaleString()}`} />
+          <SummaryMetric label="Bortle" value={`Class ${metrics.bortle}`} />
+          <SummaryMetric label="Sky quality" value={`${metrics.zenithMag.toFixed(2)} mag`} />
+          <SummaryMetric label="Naked-eye limit" value={`+${metrics.limitingMagnitude.toFixed(1)}`} />
+          <SummaryMetric label="Visible stars" value={`~${metrics.visibleStars.toLocaleString()}`} />
         </div>
 
         <div aria-hidden="true" />
