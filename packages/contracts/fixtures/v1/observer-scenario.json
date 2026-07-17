@@ -1,0 +1,42 @@
+{
+  "observer_scenario_schema_revision": "observer-scenario-fixture-v1",
+  "scenario_revision": 1,
+  "observer_wgs84": {
+    "latitude_deg": 52.01,
+    "longitude_deg": 21.01,
+    "height": 120,
+    "height_datum": "WGS84-ellipsoid"
+  },
+  "requested_time_utc": "2024-01-15T00:00:00Z",
+  "astronomy_time_data_ids": {
+    "leap_seconds": "fixture-tai-utc-2017-01-01",
+    "earth_orientation": "fixture-ut1-equals-utc"
+  },
+  "emission_release_id": "emission:fixture:central-poland-2x2:v1",
+  "emission_time_context": "reference-composite",
+  "emission_scenario_policy_id": "fixture-uniform-spectrum-angle-time-v1",
+  "atmosphere_release_id": "atmosphere:fixture:central-poland-2x2x3:v1",
+  "atmosphere_selection": {
+    "mode": "standard_scenario",
+    "valid_time_utc": "2024-01-15T00:00:00Z",
+    "standard_scenario_id": "clear-winter-layered-v1",
+    "interpolation_revision": "none-v1",
+    "downscaling_revision": "none-v1"
+  },
+  "physics_model_revision": "fixture-single-scatter-scalar-v1",
+  "physics_data_manifest_id": "physics-data:fixture:v1",
+  "atmosphere_optics_model_revision": "fixture-rayleigh-only-v1",
+  "surface_terrain_product_id": "surface-terrain:fixture-flat-lambertian:v1",
+  "output": {
+    "projection": "azimuth-elevation-equirectangular",
+    "azimuth_samples": 4,
+    "elevation_samples": 2,
+    "spectral_response": "fixture-linear-rgb-v1",
+    "quality_tier": "coarse"
+  },
+  "resource_budget": {
+    "wall_time_ms": 1000,
+    "memory_bytes": 16777216
+  }
+}
+

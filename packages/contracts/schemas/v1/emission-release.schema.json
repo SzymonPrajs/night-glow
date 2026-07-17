@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nightglow.invalid/schemas/v1/emission-release.schema.json",
+  "title": "EmissionRelease fixture v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["emission_schema_revision", "emission_model_revision", "emission_release_id", "content_license", "quantity", "unit", "support", "reference_view", "spectrum_status", "upward_angular_status", "temporal_profile_status", "total_directional_intensity_w_sr", "cells"],
+  "properties": {
+    "emission_schema_revision": {"const": "emission-fixture-v1"},
+    "emission_model_revision": {"type": "string", "minLength": 1},
+    "emission_release_id": {"type": "string", "minLength": 1},
+    "content_license": {"type": "string", "minLength": 1},
+    "quantity": {"const": "corrected-reference-view-DNB-band-directional-radiance"},
+    "unit": {"const": "nW cm-2 sr-1"},
+    "support": {"const": "exact-polygon-area"},
+    "reference_view": {"type": "string", "minLength": 1},
+    "spectrum_status": {"type": "string", "minLength": 1},
+    "upward_angular_status": {"type": "string", "minLength": 1},
+    "temporal_profile_status": {"type": "string", "minLength": 1},
+    "total_directional_intensity_w_sr": {"type": "number", "minimum": 0},
+    "cells": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["cell_id", "center_wgs84_deg", "support_area_m2", "j_dnb_nw_cm2_sr", "directional_intensity_w_sr", "coverage_status", "data_validity"],
+        "properties": {
+          "cell_id": {"type": "string", "minLength": 1},
+          "center_wgs84_deg": {"type": "array", "prefixItems": [{"type": "number", "minimum": -180, "maximum": 180}, {"type": "number", "minimum": -90, "maximum": 90}], "items": false},
+          "support_area_m2": {"type": "number", "exclusiveMinimum": 0},
+          "j_dnb_nw_cm2_sr": {"type": "number", "minimum": 0},
+          "directional_intensity_w_sr": {"type": "number", "minimum": 0},
+          "coverage_status": {"enum": ["supported_emission", "supported_dark_or_upper_bound", "no_evidence"]},
+          "data_validity": {"enum": ["valid", "missing", "masked", "censored", "not_covered"]}
+        }
+      }
+    }
+  }
+}

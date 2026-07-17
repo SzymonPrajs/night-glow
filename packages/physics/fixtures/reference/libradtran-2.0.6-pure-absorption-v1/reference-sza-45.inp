@@ -1,0 +1,12 @@
+atmosphere_file data/atmmod/afglus.dat
+source solar data/solar_flux/kurudz_1.0nm.dat
+wavelength 550 550
+mol_tau_file abs reference-absorption.dat
+mol_tau_file sca reference-scattering.dat
+rte_solver disort
+sza 45
+albedo 0
+zout 0
+output_quantity transmittance
+output_user lambda edir edn eup
+quiet

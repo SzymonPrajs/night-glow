@@ -1,0 +1,17 @@
+[package]
+name = "environment-conformance"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+atmosphere-format = { path = "../atmosphere-format" }
+atmosphere-schema = { path = "../atmosphere-schema" }
+emission-core = { path = "../emission-core" }
+emission-schema = { path = "../emission-schema" }
+environment-core = { path = "../environment-core" }
+environment-manifest = { path = "../environment-manifest" }
+
+[lints]
+workspace = true

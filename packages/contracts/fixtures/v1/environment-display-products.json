@@ -1,0 +1,36 @@
+{
+  "environment_display_schema_revision": "environment-display-fixture-v1",
+  "products": [
+    {
+      "environment_display_product_id": "display:emission:fixture:2x2:v1",
+      "environment_display_build_revision": "exact-cell-copy-v1",
+      "source_domain": "emission",
+      "source_release_id": "emission:fixture:central-poland-2x2:v1",
+      "quantity": "corrected-reference-view-DNB-band-directional-radiance",
+      "unit": "nW cm-2 sr-1",
+      "shape": [2, 2],
+      "axis_order": ["latitude", "longitude"],
+      "aggregation": "exact-source-cell",
+      "values": [1, 2, 0, 4],
+      "data_validity": ["valid", "valid", "censored", "valid"]
+    },
+    {
+      "environment_display_product_id": "display:atmosphere:fixture:surface-pressure-2x2:v1",
+      "environment_display_build_revision": "lowest-geometric-level-v1",
+      "source_domain": "atmosphere",
+      "source_release_id": "atmosphere:fixture:central-poland-2x2x3:v1",
+      "quantity": "pressure-at-lowest-supported-geometric-level",
+      "unit": "Pa",
+      "shape": [2, 2],
+      "axis_order": ["latitude", "longitude"],
+      "vertical_selection": {
+        "quantity": "geometric-height-above-WGS84-ellipsoid",
+        "value": 100,
+        "unit": "m"
+      },
+      "values": [100000, 99900, 99800, 99700],
+      "data_validity": ["valid", "valid", "valid", "valid"]
+    }
+  ]
+}
+

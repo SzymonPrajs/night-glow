@@ -2,6 +2,12 @@
 
 The Wasm package is an execution adapter for shared Rust crates, not a separate physics package.
 
+The first exports cover the scalar exponential-transmittance parity probe and a
+Wasm-owned coherent 24-value first-slice product buffer. The coordinator invokes
+the product operation once per field-sized solve and copies the returned view
+before any subsequent Wasm call. General asset handles and progressive solver
+steps remain later binding work; this fixture ABI is not a production solver.
+
 ## Responsibilities
 
 - create/destroy solver and asset handles;

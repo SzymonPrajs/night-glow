@@ -1,0 +1,50 @@
+[
+  {
+    "fixture_revision": "atmosphere-provider-extract-fixture-v1",
+    "content_license": "CC0-1.0",
+    "provider": "era5",
+    "collection_id": "synthetic-era5-pressure-level-extract",
+    "source_run_id": "era5:synthetic:2024-01-15T00",
+    "source_variable_id": "pressure",
+    "valid_time_utc": "2024-01-15T00:00:00Z",
+    "quantity": "air_pressure",
+    "source_unit": "hPa",
+    "vertical_coordinate": "pressure_level",
+    "wet_dry_basis": "not-applicable",
+    "evidence": "reanalysis",
+    "missing_value": -9999.0,
+    "values": [1000.0, 850.0, -9999.0]
+  },
+  {
+    "fixture_revision": "atmosphere-provider-extract-fixture-v1",
+    "content_license": "CC0-1.0",
+    "provider": "cams",
+    "collection_id": "synthetic-cams-model-level-extract",
+    "source_run_id": "cams:synthetic:2024-01-15T00",
+    "source_variable_id": "relative-humidity",
+    "valid_time_utc": "2024-01-15T00:00:00Z",
+    "quantity": "relative_humidity",
+    "source_unit": "%",
+    "vertical_coordinate": "hybrid_model_level",
+    "wet_dry_basis": "ambient-wet-state",
+    "evidence": "forecast",
+    "missing_value": -9999.0,
+    "values": [72.0, 45.0, -9999.0]
+  },
+  {
+    "fixture_revision": "atmosphere-provider-extract-fixture-v1",
+    "content_license": "CC0-1.0",
+    "provider": "merra2",
+    "collection_id": "synthetic-merra2-aerosol-extract",
+    "source_run_id": "merra2:synthetic:2024-01-15T00",
+    "source_variable_id": "aerosol-mass-mixing-ratio",
+    "valid_time_utc": "2024-01-15T00:00:00Z",
+    "quantity": "aerosol_mass_mixing_ratio",
+    "source_unit": "kg kg-1",
+    "vertical_coordinate": "hybrid_model_level",
+    "wet_dry_basis": "dry-matter",
+    "evidence": "reanalysis",
+    "missing_value": -9999.0,
+    "values": [1.5e-8, 4.0e-9, -9999.0]
+  }
+]

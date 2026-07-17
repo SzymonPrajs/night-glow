@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nightglow.invalid/schemas/v1/surface-terrain-product.schema.json",
+  "title": "SurfaceTerrainProduct fixture v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["surface_terrain_product_schema_revision", "surface_terrain_product_id", "content_license", "height_datum", "terrain_height_m", "surface_normal_enu", "brdf_model", "diffuse_albedo", "data_validity"],
+  "properties": {
+    "surface_terrain_product_schema_revision": {"const": "surface-terrain-fixture-v1"},
+    "surface_terrain_product_id": {"type": "string", "minLength": 1},
+    "content_license": {"type": "string", "minLength": 1},
+    "height_datum": {"const": "WGS84-ellipsoid"},
+    "terrain_height_m": {"type": "number"},
+    "surface_normal_enu": {"const": [0.0, 0.0, 1.0]},
+    "brdf_model": {"const": "lambertian"},
+    "diffuse_albedo": {"type": "number", "minimum": 0, "maximum": 1},
+    "data_validity": {"const": "valid"}
+  }
+}

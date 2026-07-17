@@ -2,6 +2,16 @@
 
 This folder defines the application that presents Night Glow's scientific products. It is a documentation-first project: no new viewer implementation should begin until the routes, ownership boundaries, data contracts, performance budgets, and migration gates described here have been reviewed.
 
+## Current status
+
+The production Viewer is intentionally unimplemented. Bounded experiments under
+`experiments/` prove Next.js route separation, MapLibre/WebGL2 startup and the
+worker-to-HDR-upload lifecycle, while the existing Vite reference viewer remains
+the runnable product baseline. Those experiments are feasibility evidence, not a
+production UI. The scientific packages and coordinator have completed a synthetic
+non-UI vertical slice; see the repository
+[implementation status](../../implementation/STATUS.md).
+
 The product has two first-class views:
 
 1. **Globe** — inspect light emitted from Earth's surface, then later other pollution layers, at planetary-to-local scales.

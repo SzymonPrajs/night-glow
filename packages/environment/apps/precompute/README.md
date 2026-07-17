@@ -1,7 +1,17 @@
 # Native precompute applications
 
-This directory will contain thin deterministic CLIs over the shared Rust crates.
-The planned applications are independent pipelines:
+This directory contains the first thin deterministic CLI over the shared Rust
+crates. The implemented bounded command is:
+
+```sh
+cargo run --manifest-path packages/environment/Cargo.toml \
+  -p environment-precompute -- fixture-report
+```
+
+It validates both committed extracted-metadata fixtures through their canonical
+ingest crates and prints a deterministic JSON summary. It performs no network
+access, provider-file decoding, inference, fusion, or publication. The broader
+planned applications remain independent pipelines:
 
 - `emission-build`: ingest, normalize, infer, validate and publish an
   `EmissionRelease`;

@@ -1,6 +1,15 @@
-# Night Glow physics toolkit — design workspace
+# Night Glow physics toolkit
 
-This folder is a **documentation-first architecture proposal**. It deliberately contains no Rust implementation or Cargo workspace yet. Its purpose is to make the physics boundaries, computation order, datasets, numerical methods, browser contract, and validation gates reviewable before code fixes those choices in place.
+This folder contains the reviewed architecture plus the first bounded Rust
+vertical slice: typed scenarios and products, an independent complete-fixture
+Environment adapter shared by native and Wasm builds, a Physics-owned terrain
+product and response manifest, minimal boundary source/optical-state
+construction, an analytic single-scatter response, native
+validation, a deterministic native fixture-precompute report, and a thin raw
+Wasm export. It is not yet the production solver.
+
+The exact verified checkpoint and remaining scientific gates are summarized in
+the repository [implementation status](../../implementation/STATUS.md).
 
 The central rule is simple:
 
@@ -20,16 +29,16 @@ The central rule is simple:
 10. [Viewer integration contract](docs/contracts/viewer.md) — observer scenarios, render products, and coherent updates.
 11. [Validation plan](docs/governance/validation-plan.md), [roadmap](docs/governance/roadmap.md), and [open TODO](docs/governance/todo.md).
 
-## Proposed workspace shape
+## Workspace shape
 
 ```text
 packages/physics/
 ├── crates/
 │   ├── nightglow-core/          units, spectra, coordinates, grids, identifiers
+│   ├── nightglow-astronomy/     pinned time-data resolution; future frames and ephemerides
+│   ├── nightglow-data/          Physics asset readers and conforming Environment adapters
+│   ├── nightglow-solver/        deterministic DAG, progress, budgets and cancellation
 │   ├── nightglow-physics/       one module per physical phenomenon
-│   ├── nightglow-astronomy/     time, frames, ephemerides, star motion, sky tiling
-│   ├── nightglow-data/          versioned loaders and calibrated data products
-│   ├── nightglow-solver/        dependency graph, caches, refinement, cancellation
 │   └── nightglow-validation/    reference cases and comparison adapters
 ├── apps/precompute/             native dataset and lookup-table compiler
 ├── bindings/wasm/               thin browser ABI; no independent physics
@@ -53,13 +62,17 @@ Every proposed calculation module has its own README under
 - The current application remains runnable while this design is reviewed. The Physics project does not absorb the current renderer, solver, PSF implementation, or Environment emission domain workspace.
 - The independent [Viewer](../../apps/viewer/README.md) owns the two-view UI, globe, observer WebGL engine, routing, display transforms, and Vercel deployment. Physics participates only through committed scenarios and versioned observer render products. See the [Viewer contract](docs/contracts/viewer.md).
 
-## Non-goals of this review stage
+## Current non-goals
 
 - No claim that a visually smooth result is physically converged.
 - No single baked RGB sky photograph standing in for calibrated spectral radiance.
 - No physics embedded in GLSL, TypeScript, or Wasm glue merely for convenience.
 - No assumption that every browser supports Wasm threads or every GPU supports the same float render-target features.
-- No implementation until the module boundaries, units, data licenses, and validation cases have been reviewed.
+- No provider ingestion, production ephemerides, calibrated multi-source sky, or
+  optimized interactive solver before its specific gate and evidence.
+- No claim that the synthetic response-basis fixture is a calibrated sky. It
+  exists to prove identities, ownership, coherent publication, and native/Wasm
+  parity before the real-data and reference-transfer gates close.
 
 ## Review questions
 

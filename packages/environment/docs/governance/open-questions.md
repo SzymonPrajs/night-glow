@@ -58,4 +58,6 @@ Questions are ranked by whether they block correct implementation. A question cl
 - Baseline conservation uses surface-integrated DNB directional intensity.
 - Missing spectrum, angle, and time profiles remain unresolved.
 - H3 is the proposed index for experiments; physical geometry is not approximated by average H3 areas.
-- No implementation code is part of the design phase.
+- The first-slice typed quantities and synthetic conformance checks are
+  implemented under [system ADR 0001](../../../../implementation/decisions/0001-first-vertical-slice.md);
+  provider ingestion remains gated by the P0 experiments above.

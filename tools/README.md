@@ -1,8 +1,9 @@
 # Repository tooling boundary
 
-This directory is reserved for future cross-package orchestration: CI helpers,
-contract/link checks, release-manifest verification, and commands that coordinate
-more than one workspace.
+This directory owns implemented cross-package orchestration: reproducibility and
+contract checks, native/Wasm probes, documentation validation, safe cleanup and
+commands that coordinate more than one workspace. Future release tooling belongs
+here under the same ownership rules.
 
 Domain logic stays with its owner:
 
@@ -25,8 +26,17 @@ placed in a generic root script merely because several packages invoke it.
 - `vercel.sh` requires an installed, authenticated Vercel CLI and never downloads
   tooling or stores credentials implicitly.
 - `check-links.mjs` validates repository-local Markdown references.
+- `check-contract-fixtures.mjs` validates first-slice schemas, identities,
+  quantities, conservation, axes and buffer lengths.
+- `check-reproducibility.mjs` verifies pinned toolchains/assets, hashes and
+  licence records.
+- `probe-wasm.mjs` measures independently compiled Environment/Physics Wasm
+  startup, memory and fixture parity.
 - `clean.sh` removes only enumerated generated paths, using the system Trash when
   available.
 
 The root [`Makefile`](../Makefile) is the public interface. These helpers are its
 implementation details rather than competing command surfaces.
+
+See the repository [implementation status](../implementation/STATUS.md) for the
+verified checkpoint and remaining gates.

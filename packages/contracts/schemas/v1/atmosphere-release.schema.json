@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nightglow.invalid/schemas/v1/atmosphere-release.schema.json",
+  "title": "AtmosphereFieldRelease fixture v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["atmosphere_schema_revision", "atmosphere_model_revision", "atmosphere_release_id", "source_run_id", "content_license", "selection", "axes", "shape", "variables", "data_validity", "uncertainty_status"],
+  "properties": {
+    "atmosphere_schema_revision": {"const": "atmosphere-fixture-v1"},
+    "atmosphere_model_revision": {"type": "string", "minLength": 1},
+    "atmosphere_release_id": {"type": "string", "minLength": 1},
+    "source_run_id": {"type": "string", "minLength": 1},
+    "content_license": {"type": "string", "minLength": 1},
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "requested_time_utc", "valid_time_utc", "standard_scenario_id", "interpolation_revision", "downscaling_revision"],
+      "properties": {
+        "mode": {"const": "standard_scenario"},
+        "requested_time_utc": {"type": "string", "format": "date-time"},
+        "valid_time_utc": {"type": "string", "format": "date-time"},
+        "standard_scenario_id": {"type": "string", "minLength": 1},
+        "interpolation_revision": {"type": "string", "minLength": 1},
+        "downscaling_revision": {"type": "string", "minLength": 1}
+      }
+    },
+    "axes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["axis_order", "latitude_deg_north", "longitude_deg_east", "geometric_height_m_above_wgs84_ellipsoid"],
+      "properties": {
+        "axis_order": {"const": ["latitude", "longitude", "height"]},
+        "latitude_deg_north": {"type": "array", "minItems": 1, "items": {"type": "number", "minimum": -90, "maximum": 90}},
+        "longitude_deg_east": {"type": "array", "minItems": 1, "items": {"type": "number", "minimum": -180, "maximum": 180}},
+        "geometric_height_m_above_wgs84_ellipsoid": {"type": "array", "minItems": 2, "items": {"type": "number"}}
+      }
+    },
+    "shape": {"type": "array", "prefixItems": [{"type": "integer", "minimum": 1}, {"type": "integer", "minimum": 1}, {"type": "integer", "minimum": 2}], "items": false},
+    "variables": {"type": "object", "required": ["pressure_pa", "temperature_k", "relative_humidity_fraction"], "additionalProperties": {"$ref": "#/$defs/variable"}},
+    "data_validity": {"enum": ["valid", "missing", "masked", "censored", "not_covered"]},
+    "uncertainty_status": {"type": "string", "minLength": 1}
+  },
+  "$defs": {
+    "variable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unit", "wet_dry_basis", "evidence", "values"],
+      "properties": {
+        "unit": {"type": "string", "minLength": 1},
+        "wet_dry_basis": {"type": "string", "minLength": 1},
+        "evidence": {"enum": ["direct_observation", "assimilated_analysis", "forecast", "reanalysis", "regional_enrichment", "observation_correction", "seasonal_anomaly", "climatology", "inferred_prior", "explicit_standard", "missing"]},
+        "values": {"type": "array", "minItems": 1, "items": {"type": "number"}}
+      }
+    }
+  }
+}

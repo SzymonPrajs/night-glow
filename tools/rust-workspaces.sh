@@ -12,17 +12,17 @@ case "$mode" in
     fi
     exit 0
     ;;
-  check|build) ;;
+  check|test|build|fmt) ;;
   wasm) ;;
   *)
-    printf 'usage: %s prepare|check|build|wasm\n' "$0" >&2
+    printf 'usage: %s prepare|check|test|build|fmt|wasm\n' "$0" >&2
     exit 2
     ;;
 esac
 
 if [[ "$mode" == wasm ]]; then
   manifests=$(find packages -path '*/bindings/wasm/Cargo.toml' -type f -print | sort)
-  cargo_command=(cargo build --target wasm32-unknown-unknown)
+  cargo_command=(cargo build --release --target wasm32-unknown-unknown)
 else
   manifests=$(find packages -mindepth 2 -maxdepth 2 -name Cargo.toml -type f -print | sort)
   cargo_command=(cargo "$mode")
@@ -42,8 +42,13 @@ while IFS= read -r manifest; do
     printf 'Skipping design-only empty workspace %s\n' "$manifest"
     continue
   fi
-  printf '%s %s\n' "${cargo_command[*]}" "$manifest"
-  "${cargo_command[@]}" --manifest-path "$manifest"
+  if [[ "$mode" == fmt ]]; then
+    printf 'cargo fmt --all --check %s\n' "$manifest"
+    cargo fmt --manifest-path "$manifest" --all -- --check
+  else
+    printf '%s %s\n' "${cargo_command[*]}" "$manifest"
+    "${cargo_command[@]}" --manifest-path "$manifest"
+  fi
   built=$((built + 1))
 done <<< "$manifests"
 

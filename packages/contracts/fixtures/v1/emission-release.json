@@ -1,0 +1,53 @@
+{
+  "emission_schema_revision": "emission-fixture-v1",
+  "emission_model_revision": "synthetic-conservation-v1",
+  "emission_release_id": "emission:fixture:central-poland-2x2:v1",
+  "content_license": "CC0-1.0",
+  "quantity": "corrected-reference-view-DNB-band-directional-radiance",
+  "unit": "nW cm-2 sr-1",
+  "reference_view": "fixture-normal-to-WGS84-ellipsoid",
+  "support": "exact-polygon-area",
+  "spectrum_status": "unresolved",
+  "upward_angular_status": "unresolved",
+  "temporal_profile_status": "unresolved",
+  "cells": [
+    {
+      "cell_id": "sw",
+      "center_wgs84_deg": [21.0, 52.0],
+      "support_area_m2": 1000000,
+      "j_dnb_nw_cm2_sr": 1,
+      "directional_intensity_w_sr": 10,
+      "coverage_status": "supported_emission",
+      "data_validity": "valid"
+    },
+    {
+      "cell_id": "se",
+      "center_wgs84_deg": [21.02, 52.0],
+      "support_area_m2": 1000000,
+      "j_dnb_nw_cm2_sr": 2,
+      "directional_intensity_w_sr": 20,
+      "coverage_status": "supported_emission",
+      "data_validity": "valid"
+    },
+    {
+      "cell_id": "nw",
+      "center_wgs84_deg": [21.0, 52.02],
+      "support_area_m2": 1000000,
+      "j_dnb_nw_cm2_sr": 0,
+      "directional_intensity_w_sr": 0,
+      "coverage_status": "supported_dark_or_upper_bound",
+      "data_validity": "censored"
+    },
+    {
+      "cell_id": "ne",
+      "center_wgs84_deg": [21.02, 52.02],
+      "support_area_m2": 1000000,
+      "j_dnb_nw_cm2_sr": 4,
+      "directional_intensity_w_sr": 40,
+      "coverage_status": "supported_emission",
+      "data_validity": "valid"
+    }
+  ],
+  "total_directional_intensity_w_sr": 70
+}
+

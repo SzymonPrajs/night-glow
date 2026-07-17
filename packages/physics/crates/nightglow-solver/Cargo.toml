@@ -1,0 +1,15 @@
+[package]
+name = "nightglow-solver"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+nightglow-astronomy = { path = "../nightglow-astronomy" }
+nightglow-core = { path = "../nightglow-core" }
+nightglow-data = { path = "../nightglow-data" }
+nightglow-physics = { path = "../nightglow-physics" }
+
+[lints]
+workspace = true

@@ -11,7 +11,22 @@ Environment does **not** propagate light. The independent [Physics](../physics/R
 
 ## Current phase
 
-**Research and design only. No Rust implementation exists yet.** `Cargo.toml` remains an empty workspace until the domain schemas, source licences, fusion rules, conformance fixtures and ownership boundaries have been reviewed.
+The first synthetic contract slice is implemented in Rust. Independent emission
+and atmosphere schemas decode immutable language-neutral fixtures, regional
+queries return contiguous batches, Physics can consume those products without
+importing Environment crates, and a thin Wasm adapter validates field-sized
+buffers. `environment-conformance` executes the release/query boundary, and the
+thin `environment-precompute fixture-report` command deterministically
+orchestrates the two extracted synthetic adapters without moving their science
+into the CLI.
+
+This does not claim provider or scientific-product readiness. Black Marble and
+model-atmosphere ingestion, fusion, uncertainty calibration, real-data licence
+evidence, global partitioning, and production publication remain gated by the
+bounded feasibility work.
+
+The cross-domain checkpoint, exact measurements and remaining gates are summarized
+in the repository [implementation status](../../implementation/STATUS.md).
 
 The final package name is `packages/environment/`. This does not turn one emission schema into a catch-all record: `EmissionRelease` and `AtmosphereFieldRelease` are separate products with independent model revisions, temporal behavior, spatial representations, and validation.
 
@@ -81,7 +96,9 @@ packages/environment/
 │   ├── governance/                licensing, risks, bibliography, open questions
 │   └── decisions/                 architecture decision records
 ├── research/                      bounded dataset probes and evidence reports
-└── schemas/                       future normative machine-readable contracts
+└── schemas/                       domain-specific schemas beyond the shared first-slice contracts
 ```
 
-The first atmospheric task is not a global download. It is a small Warsaw/Delhi/rural/marine fixture comparing ERA5, CAMS and MERRA-2 variables, coordinates, licences, vertical interpolation and browser-sized encoding.
+The next atmospheric data task is not a global download. It is a small
+Warsaw/Delhi/rural/marine probe comparing ERA5, CAMS and MERRA-2 variables,
+coordinates, licences, vertical interpolation and browser-sized encoding.

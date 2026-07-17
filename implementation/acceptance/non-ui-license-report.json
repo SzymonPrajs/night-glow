@@ -1,0 +1,80 @@
+{
+  "report_revision": "nightglow-non-ui-license-report-v1",
+  "generated_for": "synthetic-first-slice",
+  "source_packages": [
+    {
+      "path": "packages/environment",
+      "declared_license": "MIT OR Apache-2.0",
+      "redistribution_status": "review_required",
+      "limitation": "Repository-level MIT and Apache licence text files are not yet committed."
+    },
+    {
+      "path": "packages/physics",
+      "declared_license": "MIT OR Apache-2.0",
+      "redistribution_status": "review_required",
+      "limitation": "Repository-level MIT and Apache licence text files are not yet committed."
+    },
+    {
+      "path": "runtime/browser-worker",
+      "declared_license": "private-repository-source",
+      "redistribution_status": "review_required",
+      "limitation": "The private package does not declare a standalone distribution licence."
+    }
+  ],
+  "assets": [
+    {
+      "path": "runtime/browser-worker/fixtures/v1/runtime-compatibility-manifest.json",
+      "license": "CC0-1.0 synthetic fixture",
+      "redistribution_status": "redistributable",
+      "sha256": "da30df184d52beeeea9d4d4dde95a0c69989f888b74b48b1e9378531b21f6d68"
+    },
+    {
+      "path": "packages/contracts/fixtures/v1/manifest.json",
+      "license": "CC0-1.0",
+      "redistribution_status": "redistributable",
+      "sha256": "9b3c68b89d430fb7fa3ef4c0245edfcd9dff74d6bedfcce1c6595903b405dce4"
+    },
+    {
+      "path": "packages/physics/fixtures/v1/physics-data-manifest.json",
+      "license": "CC0-1.0 synthetic fixture",
+      "redistribution_status": "redistributable",
+      "sha256": "feba9d6b8743fd06e9d16eab396f0f07d68d0ca210bb9331c66b618c624f794c"
+    },
+    {
+      "path": "packages/physics/fixtures/v1/surface-terrain-product.json",
+      "license": "CC0-1.0",
+      "redistribution_status": "redistributable",
+      "sha256": "d6f2ea2ba913e5434ddc81ff2eb14631cd3712d011a433d10903cae5473b9579"
+    },
+    {
+      "path": "packages/physics/fixtures/jpl-horizons-v1.json",
+      "license": "not-stated-in-API-response",
+      "redistribution_status": "review_required",
+      "source": "NASA/JPL Horizons API 1.3",
+      "sha256": "98327dadae2008c4d4267159b73adeaa071abe3a134d3ab9a203f66a79af46c0",
+      "limitation": "Retained for validation provenance; production redistribution policy remains open."
+    },
+    {
+      "path": "packages/physics/fixtures/v1/libradtran-pure-absorption.json",
+      "license": "CC0-1.0 generated fixture",
+      "redistribution_status": "redistributable",
+      "source": "libRadtran 2.0.6-MYSTIC DISORT",
+      "sha256": "d7f976d9077c50180bab1c39d741a5f65f1d6d8ebcf36db7eaf9df20bf34e0c0",
+      "limitation": "The project-authored inputs and generated numeric output are CC0; the GPL-2.0-or-later solver source and binaries are not redistributed."
+    },
+    {
+      "path": "packages/environment/fixtures/v1/black-marble-vnp46a2-extract.json",
+      "license": "CC0-1.0 synthetic fixture",
+      "redistribution_status": "redistributable",
+      "sha256": "2a41b1f8c30d7e407ddb98807d60f114b023edfe989c9162d1bd5381849edf99",
+      "limitation": "Contains provider metadata meanings and invented values, not NASA science pixels."
+    },
+    {
+      "path": "packages/environment/fixtures/v1/atmosphere-provider-extracts.json",
+      "license": "CC0-1.0 synthetic fixture",
+      "redistribution_status": "redistributable",
+      "sha256": "105e413603e4d52f901a428fedf45598e95a2137d58789dcc3bb52c55902bccc",
+      "limitation": "Contains invented ERA5, CAMS and MERRA-2 extraction metadata and values, not provider data bytes."
+    }
+  ]
+}

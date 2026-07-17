@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nightglow.invalid/schemas/v1/observer-scenario.schema.json",
+  "title": "ObserverScenario fixture v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["observer_scenario_schema_revision", "scenario_revision", "observer_wgs84", "requested_time_utc", "astronomy_time_data_ids", "emission_release_id", "emission_time_context", "emission_scenario_policy_id", "atmosphere_release_id", "atmosphere_selection", "physics_model_revision", "physics_data_manifest_id", "atmosphere_optics_model_revision", "surface_terrain_product_id", "output", "resource_budget"],
+  "properties": {
+    "observer_scenario_schema_revision": {"const": "observer-scenario-fixture-v1"},
+    "scenario_revision": {"type": "integer", "minimum": 1},
+    "observer_wgs84": {
+      "type": "object", "additionalProperties": false,
+      "required": ["latitude_deg", "longitude_deg", "height", "height_datum"],
+      "properties": {"latitude_deg": {"type": "number", "minimum": -90, "maximum": 90}, "longitude_deg": {"type": "number", "minimum": -180, "maximum": 180}, "height": {"type": "number"}, "height_datum": {"const": "WGS84-ellipsoid"}}
+    },
+    "requested_time_utc": {"type": "string", "format": "date-time"},
+    "astronomy_time_data_ids": {"type": "object", "additionalProperties": {"type": "string"}, "minProperties": 1},
+    "emission_release_id": {"type": "string", "minLength": 1},
+    "emission_time_context": {"type": "string", "minLength": 1},
+    "emission_scenario_policy_id": {"type": "string", "minLength": 1},
+    "atmosphere_release_id": {"type": "string", "minLength": 1},
+    "atmosphere_selection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["mode", "valid_time_utc", "standard_scenario_id", "interpolation_revision", "downscaling_revision"],
+      "properties": {"mode": {"const": "standard_scenario"}, "valid_time_utc": {"type": "string", "format": "date-time"}, "standard_scenario_id": {"type": "string", "minLength": 1}, "interpolation_revision": {"type": "string", "minLength": 1}, "downscaling_revision": {"type": "string", "minLength": 1}}
+    },
+    "physics_model_revision": {"type": "string", "minLength": 1},
+    "physics_data_manifest_id": {"type": "string", "minLength": 1},
+    "atmosphere_optics_model_revision": {"type": "string", "minLength": 1},
+    "surface_terrain_product_id": {"type": "string", "minLength": 1},
+    "output": {
+      "type": "object", "additionalProperties": false,
+      "required": ["projection", "azimuth_samples", "elevation_samples", "spectral_response", "quality_tier"],
+      "properties": {"projection": {"const": "azimuth-elevation-equirectangular"}, "azimuth_samples": {"type": "integer", "minimum": 1}, "elevation_samples": {"type": "integer", "minimum": 1}, "spectral_response": {"type": "string", "minLength": 1}, "quality_tier": {"type": "string", "minLength": 1}}
+    },
+    "resource_budget": {
+      "type": "object", "additionalProperties": false,
+      "required": ["wall_time_ms", "memory_bytes"],
+      "properties": {"wall_time_ms": {"type": "integer", "minimum": 1}, "memory_bytes": {"type": "integer", "minimum": 1}}
+    }
+  }
+}

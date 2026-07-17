@@ -1,0 +1,42 @@
+{
+  "fixture_revision": "nightglow-fixture-v1",
+  "license": "CC0-1.0",
+  "horizontal": {
+    "frame": "WGS84-geodetic",
+    "latitude": "north-positive-degrees",
+    "longitude": "east-positive-degrees",
+    "local_frame": "right-handed-east-north-up"
+  },
+  "vertical": {
+    "observer_height_unit": "m",
+    "observer_height_datum": "WGS84-ellipsoid",
+    "atmosphere_level_quantity": "geometric-height-above-WGS84-ellipsoid",
+    "atmosphere_level_unit": "m"
+  },
+  "time": {
+    "stored_scale": "UTC",
+    "encoding": "RFC3339",
+    "leap_second_table_revision": "fixture-tai-utc-2017-01-01",
+    "earth_orientation_revision": "fixture-ut1-equals-utc"
+  },
+  "earth": {
+    "geometry": "sphere",
+    "radius_m": 6371008.8
+  },
+  "polarization": "scalar-unpolarized",
+  "spectral_basis": {
+    "wavelength_medium": "vacuum",
+    "wavelength_unit": "nm",
+    "bands": [
+      { "id": "violet", "center_nm": 420, "width_nm": 30 },
+      { "id": "blue", "center_nm": 450, "width_nm": 30 },
+      { "id": "blueGreen", "center_nm": 480, "width_nm": 30 },
+      { "id": "cyan", "center_nm": 510, "width_nm": 30 },
+      { "id": "green", "center_nm": 550, "width_nm": 40 },
+      { "id": "sodium", "center_nm": 589, "width_nm": 38 },
+      { "id": "orangeRed", "center_nm": 625, "width_nm": 35 },
+      { "id": "red", "center_nm": 680, "width_nm": 55 }
+    ]
+  }
+}
+

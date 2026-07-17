@@ -16,12 +16,16 @@ same architecture to global data and high-fidelity browser rendering.
 
 | Item | State |
 | --- | --- |
-| Current milestone | M0 — foundation and decision freeze |
-| Next system gate | approve names, contracts, first fixtures and acceptance measures |
-| Running product | existing TypeScript/Vite application remains the baseline |
-| Planned architecture | documentation complete enough for bounded feasibility work |
-| Rust implementation | not started |
+| Current milestone | M1 — bounded feasibility proofs |
+| Completed system work | M0 and synthetic-contract M2 complete; non-UI M3 slice complete |
+| Next system gate | close real-data and curved-Earth reference-transfer evidence; production Viewer/deployment remain separate later gates |
+| Running product | existing TypeScript/Vite reference viewer remains the baseline; bounded Next runtime proof is not production UI |
+| Implemented architecture | typed contracts, both Rust workspaces, native probes, dual Wasm modules and coordinator lifecycle |
+| Rust implementation | synthetic Environment-to-Physics vertical slice implemented and validated; real-data and production-fidelity gates remain open |
 | Production deployment | not started |
+
+See the [current implementation status](STATUS.md) for the concise cross-domain
+snapshot, measured checkpoint and critical path.
 
 ## How to maintain this plan
 
@@ -89,7 +93,7 @@ but the next integration gate opens only when all required inputs pass.
 
 ## M0 — Foundation and decision freeze
 
-State: **active**
+State: **complete**
 
 - [x] Separate the proposed system into independently reviewable Environment,
   Physics and Viewer projects.
@@ -101,20 +105,23 @@ State: **active**
   data policy, and repository tooling into explicit top-level boundaries.
 - [x] Establish the root `Makefile`, toolchain declarations, safe database and
   Vercel adapters, and repo-local Codex setup as the common operational surface.
-- [ ] Resolve every P0 open decision that changes the first schemas, physical
-  quantities, solver family, spectral basis, browser baseline or data licence.
-- [ ] Select the first small open conformance fixtures and record their source,
-  licence, checksums, quantities, units and expected values.
-- [ ] Freeze initial supported coordinate, height, time and wavelength conventions.
-- [ ] Define measurable accuracy, performance, memory and browser-support targets
-  for the first vertical slice.
+- [x] Resolve every P0 open decision that changes the first schemas, physical
+  quantities, solver family, spectral basis, browser baseline or data licence in
+  [first-slice ADR 0001](decisions/0001-first-vertical-slice.md).
+- [x] Select the first small open conformance fixtures and record their source,
+  licence, checksums, quantities, units and expected values in
+  [`packages/contracts/fixtures/v1`](../packages/contracts/fixtures/v1/README.md).
+- [x] Freeze initial supported coordinate, height, time and wavelength conventions
+  in [the fixture conventions](../packages/contracts/fixtures/v1/conventions.json).
+- [x] Define measurable accuracy, performance, memory and browser-support targets
+  in [the M0 acceptance manifest](acceptance/m0-first-slice.json).
 
 Gate: the three projects can describe the same first scenario and expected
 products without an unnamed assumption, hidden default or incompatible term.
 
 ## M1 — Bounded feasibility proofs
 
-State: **planned**
+State: **active**
 
 - [ ] Run the emission feasibility experiment on a small, known region and prove
   radiometric meaning, support and conservation before global reconstruction.
@@ -123,72 +130,84 @@ State: **planned**
   encoding.
 - [ ] Compare candidate reference radiative-transfer methods on a small
   curved-Earth, vertically varying atmosphere case.
-- [ ] Validate the proposed astronomy/time stack against independent Sun, Moon,
-  planet and star reference vectors.
-- [ ] Compile a minimal Rust numeric kernel to native and Wasm; measure startup,
-  SIMD, memory growth, cancellation and coarse buffer transfer.
-- [ ] Upload a synthetic HDR `ObserverRenderProductSet` through the proposed
-  worker-to-WebGL2 path and verify flux, projection, precision and cleanup.
+- [x] Validate the preserved astronomy/time baseline against independent Sun,
+  Moon and planet JPL reference vectors; production Rust/SOFA parity remains M5.
+- [x] Compile a minimal Rust numeric kernel to native and Wasm; measure startup,
+  memory and parity through the single-worker baseline. SIMD/threads remain an
+  optional capability experiment.
+- [x] Upload a synthetic HDR `ObserverRenderProductSet` through the proposed
+  worker-to-WebGL2 path and verify flux, revision cancellation, precision and cleanup.
 - [ ] Prove the MapLibre globe layer, observer renderer lifecycle, Vercel asset
   paths, MIME/range/cache behavior and non-threaded worker baseline.
 - [ ] Record accept/reject decisions for every experiment and revise the detailed
   architecture where evidence requires it.
+
+Current executed evidence and honest exclusions are recorded in
+[the M1 bounded-proof record](evidence/m1-bounded-proofs.md).
 
 Gate: no unresolved feasibility result makes the proposed data format, solver,
 Wasm boundary, GPU path or deployment model implausible.
 
 ## M2 — Workspaces, contracts and conformance harnesses
 
-State: **planned**
+State: **complete** (synthetic first-slice contract; M1 scientific feasibility gates remain open)
 
-- [ ] Create the Environment Rust workspace with shared core/manifest crates and
+- [x] Create the Environment Rust workspace with shared core/manifest crates and
   separate emission and atmosphere package families.
-- [ ] Create the Physics Rust workspace with core, astronomy, data, physics,
+- [x] Create the Physics Rust workspace with core, astronomy, data, physics,
   solver, validation and Wasm packages.
-- [ ] Implement `runtime/browser-worker/` as the independent coordinator module-worker
+- [x] Implement `runtime/browser-worker/` as the independent coordinator module-worker
   package with capability, lifecycle, cancellation, transfer, and memory tests.
-- [ ] Freeze the first machine-readable Environment and Physics/Viewer schemas and
+- [x] Freeze the first machine-readable Environment and Physics/Viewer schemas and
   revision rules from the system contract.
-- [ ] Implement typed quantities, units, coordinates, times, identifiers,
+- [x] Implement typed quantities, units, coordinates, times, identifiers,
   validity/evidence/uncertainty and structured errors before domain equations.
-- [ ] Publish tiny language-neutral emission, atmosphere, Physics and Viewer
+- [x] Publish tiny language-neutral emission, atmosphere, Physics and Viewer
   conformance fixtures.
-- [ ] Establish native/Wasm parity tests, deterministic build manifests, licence
+- [x] Establish native/Wasm parity tests, deterministic build manifests, licence
   reports and content-addressed fixture assets.
-- [ ] Add CI for format validation, Rust tests, Wasm build/parity, documentation
+- [x] Add CI for format validation, Rust tests, Wasm build/parity, documentation
   links and compatibility fixtures.
 
 Gate: every package can decode or reject the same tiny products consistently, and
 no integration depends on an internal crate from another project.
 
+Evidence: [M3 non-UI fixture-slice report](evidence/m3-non-ui-fixture-slice.md)
+and the committed `make non-ui-check` CI surface. Completing this software gate
+does not waive the open real-data and reference-transfer evidence in M1.
+
 ## M3 — First end-to-end vertical slice
 
-State: **planned**
+State: **active** (non-UI slice complete; two production Viewer tasks remain open)
 
-- [ ] Produce one tiny `EmissionRelease`, one `AtmosphereFieldRelease`, their
+- [x] Produce one tiny `EmissionRelease`, one `AtmosphereFieldRelease`, their
   independent `EnvironmentDisplayProduct` derivatives and one Physics-owned
   `SurfaceTerrainProduct`.
-- [ ] Commit one complete `ObserverScenario` with pinned revisions and products.
-- [ ] Resolve astronomy and the atmospheric selection; query contiguous emission
+- [x] Commit one complete `ObserverScenario` with pinned revisions and products.
+- [x] Resolve astronomy and the atmospheric selection; query contiguous emission
   and atmosphere batches through the canonical providers.
-- [ ] Build a minimal `ArtificialLightBoundarySource` and
+- [x] Build a minimal `ArtificialLightBoundarySource` and
   `OpticalAtmosphereState`, then run one validated coarse transfer/observation
   solve.
-- [ ] Return a coherent `ObserverRenderProductSet` through the coordinator worker
+- [x] Return a coherent `ObserverRenderProductSet` through the coordinator worker
   with progress, cancellation, stale-result rejection and structured failures.
 - [ ] Display the Environment products on the globe, enter the observer view from
   a pin and render the linear HDR Physics result through WebGL2.
 - [ ] Demonstrate that exposure/palette changes do not rerun Physics and that a
   scientific scenario change does.
-- [ ] Preserve a reproducible scenario/result report with all dependency IDs and
+- [x] Preserve a reproducible scenario/result report with all dependency IDs and
   separate source, state, numerical and display errors.
+
+The executed non-UI slice and its deliberate scientific limitations are recorded
+in [the M3 non-UI fixture-slice report](evidence/m3-non-ui-fixture-slice.md). The
+two Viewer tasks above remain intentionally unimplemented.
 
 Gate: one small scenario works from immutable input products to both Viewer modes
 without bypassing a planned contract or duplicating physics.
 
 ## M4 — Environment v1
 
-State: **planned**
+State: **planned** (synthetic schema/adapter/precompute prerequisites implemented)
 
 - [ ] Implement the emission roadmap through a validated regional release:
   ingestion, correction semantics, conservative reconstruction, profiles,
@@ -210,7 +229,7 @@ and [atmosphere roadmap](../packages/environment/docs/atmosphere/roadmap-and-tod
 
 ## M5 — Physics v1
 
-State: **planned**
+State: **planned** (bounded reference kernel, adapters and native/Wasm prerequisites implemented)
 
 - [ ] Implement typed time scales, Earth orientation, reference frames,
   ephemerides, stellar propagation and terrain geometry with reference tests.
@@ -237,7 +256,7 @@ Detailed owner: [Physics roadmap](../packages/physics/docs/governance/roadmap.md
 
 ## M6 — Viewer v1
 
-State: **planned**
+State: **planned** (bounded runtime experiments exist; production UI is unimplemented)
 
 - [ ] Build the Next.js application shell with independently loaded `/globe` and
   `/observe` client routes and accessible shared navigation.

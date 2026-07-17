@@ -1,0 +1,11 @@
+{
+  "surface_terrain_product_schema_revision": "surface-terrain-fixture-v1",
+  "surface_terrain_product_id": "surface-terrain:fixture-flat-lambertian:v1",
+  "content_license": "CC0-1.0",
+  "height_datum": "WGS84-ellipsoid",
+  "terrain_height_m": 100.0,
+  "surface_normal_enu": [0.0, 0.0, 1.0],
+  "brdf_model": "lambertian",
+  "diffuse_albedo": 0.15,
+  "data_validity": "valid"
+}

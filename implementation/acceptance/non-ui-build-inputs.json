@@ -1,0 +1,22 @@
+{
+  "manifest_revision": "nightglow-non-ui-build-inputs-v1",
+  "toolchains": {
+    "node": "24.2.0",
+    "rust": "1.97.0"
+  },
+  "sha256": {
+    ".nvmrc": "0247b8c2458efab0ee1fc22a643fab0bea14362a1a71d5a2fd6c10e04243a63e",
+    "rust-toolchain.toml": "eb8ed53423a7d9d3e3b3fc0367ee89426b4b9385114465919926b2829bfe7ecd",
+    "packages/environment/Cargo.lock": "440e747c92b8bad4f9d3766df04b985d6ba276ab1f3de84a60b5f9005ebbb71a",
+    "packages/physics/Cargo.lock": "2e33fb187d487e98144b95b2a9031be089afcd9a3cdc134b3a70e04f5b672c26",
+    "runtime/browser-worker/package-lock.json": "9a10a519315a0c69ba2428c3206463a8301c123371f54f6742cae3f91d0126a3",
+    "runtime/browser-worker/fixtures/v1/runtime-compatibility-manifest.json": "da30df184d52beeeea9d4d4dde95a0c69989f888b74b48b1e9378531b21f6d68",
+    "packages/contracts/fixtures/v1/manifest.json": "9b3c68b89d430fb7fa3ef4c0245edfcd9dff74d6bedfcce1c6595903b405dce4",
+    "packages/physics/fixtures/jpl-horizons-v1.json": "98327dadae2008c4d4267159b73adeaa071abe3a134d3ab9a203f66a79af46c0",
+    "packages/physics/fixtures/v1/physics-data-manifest.json": "feba9d6b8743fd06e9d16eab396f0f07d68d0ca210bb9331c66b618c624f794c",
+    "packages/physics/fixtures/v1/surface-terrain-product.json": "d6f2ea2ba913e5434ddc81ff2eb14631cd3712d011a433d10903cae5473b9579",
+    "packages/physics/fixtures/v1/libradtran-pure-absorption.json": "d7f976d9077c50180bab1c39d741a5f65f1d6d8ebcf36db7eaf9df20bf34e0c0",
+    "packages/environment/fixtures/v1/black-marble-vnp46a2-extract.json": "2a41b1f8c30d7e407ddb98807d60f114b023edfe989c9162d1bd5381849edf99",
+    "packages/environment/fixtures/v1/atmosphere-provider-extracts.json": "105e413603e4d52f901a428fedf45598e95a2137d58789dcc3bb52c55902bccc"
+  }
+}

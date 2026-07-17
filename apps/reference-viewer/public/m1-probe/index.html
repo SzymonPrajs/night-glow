@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Night Glow M1 browser probe</title>
+  </head>
+  <body>
+    <h1>Night Glow M1 browser probe</h1>
+    <p id="status" role="status">running</p>
+    <canvas id="probe" width="4" height="2"></canvas>
+    <script type="module">
+      const status = document.querySelector('#status')
+      const canvas = document.querySelector('#probe')
+      const gl = canvas.getContext('webgl2')
+      const report = {
+        webgl2: Boolean(gl),
+        floatColorBuffer: Boolean(gl?.getExtension('EXT_color_buffer_float')),
+        cancelledRevision: null,
+        cancellationMs: null,
+        productRevision: null,
+        coherentBarrier: null,
+        transferredBytes: null,
+        detachedByteLength: null,
+        relativeFluxError: null,
+        disposed: false,
+      }
+      window.__m1ProbeReport = report
+      if (!gl || !report.floatColorBuffer) throw new Error('WebGL2 float color buffers are required for this probe')
+
+      const worker = new Worker('./worker.js', { type: 'module' })
+      let productComplete = false
+      const finishWhenComplete = () => {
+        if (!productComplete || report.detachedByteLength === null) return
+        worker.terminate()
+        status.textContent = 'complete'
+      }
+      const cancellationStart = performance.now()
+      worker.postMessage({ type: 'solve', scenarioRevision: 1, remainingChunks: 100 })
+      worker.postMessage({ type: 'cancel', scenarioRevision: 1 })
+      worker.postMessage({ type: 'solve', scenarioRevision: 2, remainingChunks: 2 })
+
+      worker.onmessage = ({ data }) => {
+        if (data.type === 'cancelled') {
+          report.cancelledRevision = data.scenarioRevision
+          report.cancellationMs = performance.now() - cancellationStart
+        }
+        if (data.type === 'transfer-state') {
+          report.detachedByteLength = data.detachedByteLength
+          finishWhenComplete()
+        }
+        if (data.type !== 'product') return
+
+        report.productRevision = data.scenarioRevision
+        report.coherentBarrier = data.coherentBarrier
+        report.transferredBytes = data.buffer.byteLength
+        const texture = gl.createTexture()
+        const framebuffer = gl.createFramebuffer()
+        gl.bindTexture(gl.TEXTURE_2D, texture)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, data.width, data.height, 0, gl.RGBA, gl.FLOAT, new Float32Array(data.buffer))
+        gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer)
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0)
+        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error('Float framebuffer is incomplete')
+
+        const readback = new Float32Array(data.width * data.height * 4)
+        gl.readPixels(0, 0, data.width, data.height, gl.RGBA, gl.FLOAT, readback)
+        let outputFlux = 0
+        for (let index = 0; index < readback.length; index += 4) outputFlux += readback[index] + readback[index + 1] + readback[index + 2]
+        report.relativeFluxError = Math.abs(outputFlux - data.inputFlux) / data.inputFlux
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+        gl.bindTexture(gl.TEXTURE_2D, null)
+        gl.deleteFramebuffer(framebuffer)
+        gl.deleteTexture(texture)
+        report.disposed = gl.isFramebuffer(framebuffer) === false && gl.isTexture(texture) === false
+        productComplete = true
+        finishWhenComplete()
+      }
+    </script>
+  </body>
+</html>

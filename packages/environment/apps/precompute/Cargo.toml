@@ -1,0 +1,16 @@
+[package]
+name = "environment-precompute"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+atmosphere-ingest = { path = "../../crates/atmosphere-ingest" }
+emission-ingest-black-marble = { path = "../../crates/emission-ingest-black-marble" }
+environment-core = { path = "../../crates/environment-core" }
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
