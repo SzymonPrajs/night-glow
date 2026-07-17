@@ -287,11 +287,18 @@ pub fn solve_fixture_response(
     let scale = total_directional_intensity_w_sr / manifest.reference_directional_intensity_w_sr
         * actual_response
         / reference_response;
-    Ok(manifest
+    let values = manifest
         .response_basis_linear_rgb
         .iter()
         .map(|value| (value * scale) as f32)
-        .collect())
+        .collect::<Vec<_>>();
+    if values
+        .iter()
+        .any(|value| !value.is_finite() || *value < 0.0)
+    {
+        return Err(PhysicsError::NumericalNonConvergence);
+    }
+    Ok(values)
 }
 
 #[cfg(test)]
@@ -318,6 +325,18 @@ mod tests {
         assert_eq!(
             homogeneous_single_scatter(2.0, OpticalDepth(0.0), 0.9, 0.1),
             0.0
+        );
+    }
+
+    #[test]
+    fn rejects_f32_publication_overflow() {
+        assert_eq!(
+            solve_fixture_response(
+                f64::MAX / 4.0,
+                99_850.0,
+                &PhysicsDataManifest::first_slice_fixture()
+            ),
+            Err(PhysicsError::NumericalNonConvergence)
         );
     }
 

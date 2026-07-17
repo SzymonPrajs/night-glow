@@ -137,6 +137,19 @@ test('releases Wasm request views after successful and rejected work', async () 
   assert.equal(coordinator.diagnostics().retainedPhysicsOutputValues, 0)
 })
 
+test('rejects finite input that cannot be represented by the f32 product', async () => {
+  const coordinator = await initializedCoordinator()
+  const request = await fixtureRequest()
+  request.emission.j_dnb_nw_cm2_sr.fill(Number.MAX_VALUE / 16)
+  request.emission.support_area_m2.fill(1)
+  await assert.rejects(
+    coordinator.commitScenario(request),
+    (error) => error instanceof CoordinatorError && error.category === 'numerical_non_convergence',
+  )
+  assert.equal(coordinator.diagnostics().retainedEnvironmentInputValues, 0)
+  assert.equal(coordinator.diagnostics().retainedPhysicsOutputValues, 0)
+})
+
 test('repeated scenarios reuse bounded Wasm memory', async () => {
   const coordinator = await initializedCoordinator()
   await coordinator.commitScenario(await fixtureRequest())

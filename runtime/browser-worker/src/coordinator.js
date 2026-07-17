@@ -201,7 +201,11 @@ export class Coordinator {
       if (!pointer || length !== 24) {
         throw new CoordinatorError('numerical_non_convergence', 'Physics did not publish a coherent product')
       }
-      return new Float32Array(this.#physics.memory.buffer, pointer, length).slice()
+      const values = new Float32Array(this.#physics.memory.buffer, pointer, length).slice()
+      if (values.some((value) => !Number.isFinite(value) || value < 0)) {
+        throw new CoordinatorError('numerical_non_convergence', 'Physics published invalid radiance values')
+      }
+      return values
     } finally {
       release()
     }
