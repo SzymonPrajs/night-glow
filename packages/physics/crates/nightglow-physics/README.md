@@ -1,13 +1,15 @@
 # `nightglow-physics`
 
-The first implemented module is a deliberately narrow analytic
-exponential-atmosphere optical-depth case, a composite-trapezoid convergence
-candidate, Beer-Lambert transmittance, and a homogeneous single-scatter limiting
-case. The synthetic vertical slice also constructs named artificial-light
+The first implemented module includes an analytic vertical exponential
+atmosphere, a composite-trapezoid convergence candidate, Beer-Lambert
+transmittance, a homogeneous single-scatter limiting case, and a spherical-shell
+ray/optical-depth integral with explicit Simpson convergence. The synthetic
+vertical slice also constructs named artificial-light
 boundary-source and optical-atmosphere states, resolves the pinned fixture time
 data, validates a Physics-owned terrain product, and publishes one atomic linear
 HDR render product. These functions establish ownership and validation
-mechanics; they are not a curved-Earth production transfer solver.
+mechanics; the spherical primitive is not yet a curved-Earth production
+radiative-transfer solver.
 
 The single source of truth for physical equations. Modules expose pure or explicitly stateful calculations over typed inputs. Native and Wasm builds select supported algorithms through declared fidelity profiles; neither target owns a second formula.
 

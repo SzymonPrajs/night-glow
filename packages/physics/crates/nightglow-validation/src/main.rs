@@ -1,7 +1,8 @@
 use nightglow_core::{ExtinctionPerMetre, ObserverScenario, OpticalDepth, PathLengthMetres};
 use nightglow_data::{decode_environment_products, decode_physics_assets};
 use nightglow_physics::{
-    exponential_optical_depth, exponential_optical_depth_trapezoid, homogeneous_single_scatter,
+    SphericalExponentialAtmosphere, exponential_optical_depth, exponential_optical_depth_trapezoid,
+    homogeneous_single_scatter, spherical_exponential_optical_depth,
 };
 use nightglow_solver::{CancellationToken, solve_scenario};
 use nightglow_validation::compare_libradtran_pure_absorption;
@@ -21,6 +22,23 @@ fn main() {
     let coarse_error = relative_error(coarse, exact);
     let fine_error = relative_error(fine, exact);
     let single_scatter = homogeneous_single_scatter(2.0, OpticalDepth(exact), 0.9, 0.1);
+    let spherical_atmosphere = SphericalExponentialAtmosphere {
+        planet_radius: PathLengthMetres(6_371_000.0),
+        observer_altitude: PathLengthMetres(0.0),
+        top_altitude: PathLengthMetres(120_000.0),
+        surface_extinction: beta,
+        scale_height: scale,
+    };
+    let spherical_horizon_fine =
+        spherical_exponential_optical_depth(spherical_atmosphere, 0.0, 512)
+            .expect("spherical horizon integration should converge")
+            .0;
+    let spherical_horizon_reference =
+        spherical_exponential_optical_depth(spherical_atmosphere, 0.0, 32_768)
+            .expect("spherical horizon reference should converge")
+            .0;
+    let spherical_horizon_error =
+        relative_error(spherical_horizon_fine, spherical_horizon_reference);
     let libradtran = compare_libradtran_pure_absorption(include_str!(
         "../../../fixtures/v1/libradtran-pure-absorption.json"
     ))
@@ -63,6 +81,7 @@ fn main() {
     assert!(fine_error < coarse_error);
     assert!(single_scatter.is_finite() && single_scatter > 0.0 && single_scatter < 2.0);
     assert!(libradtran.within_tolerance);
+    assert!(spherical_horizon_error < 1.0e-8);
     assert_eq!(render.scenario_revision, expected.scenario_revision);
     assert_eq!(render.values.len(), expected.values.len());
     assert!(render_error < 1.0e-6);
@@ -76,6 +95,8 @@ fn main() {
             "  \"single_scatter_radiance\": {:.12},\n",
             "  \"libradtran_reference_cases\": {},\n",
             "  \"libradtran_max_relative_error\": {:.12e},\n",
+            "  \"spherical_horizon_optical_depth\": {:.12},\n",
+            "  \"spherical_horizon_relative_error\": {:.12e},\n",
             "  \"probe_elapsed_microseconds\": {},\n",
             "  \"environment_directional_intensity_w_sr\": {:.1},\n",
             "  \"environment_mean_surface_pressure_pa\": {:.1},\n",
@@ -89,6 +110,8 @@ fn main() {
         single_scatter,
         libradtran.case_count,
         libradtran.max_relative_error,
+        spherical_horizon_fine,
+        spherical_horizon_error,
         elapsed.as_micros(),
         environment.directional_intensity_w_sr.iter().sum::<f64>(),
         environment.mean_surface_pressure_pa,
