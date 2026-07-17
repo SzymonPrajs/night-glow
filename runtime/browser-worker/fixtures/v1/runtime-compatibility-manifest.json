@@ -1,0 +1,17 @@
+{
+  "manifest_revision": "nightglow-runtime-compatibility-fixture-v1",
+  "content_license": "CC0-1.0",
+  "protocol_revision": "nightglow-browser-worker-v1",
+  "environment_abi_revision": 1,
+  "physics_abi_revision": 1,
+  "observer_scenario_schema_revision": "observer-scenario-fixture-v1",
+  "emission_release_id": "emission:fixture:central-poland-2x2:v1",
+  "atmosphere_release_id": "atmosphere:fixture:central-poland-2x2x3:v1",
+  "atmosphere_valid_time_utc": "2024-01-15T00:00:00Z",
+  "physics_model_revision": "fixture-single-scatter-scalar-v1",
+  "physics_data_manifest_id": "physics-data:fixture:v1",
+  "atmosphere_optics_model_revision": "fixture-rayleigh-only-v1",
+  "surface_terrain_product_id": "surface-terrain:fixture-flat-lambertian:v1",
+  "projection": "azimuth-elevation-equirectangular",
+  "shape": [2, 4, 3]
+}

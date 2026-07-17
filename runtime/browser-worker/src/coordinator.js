@@ -18,6 +18,7 @@ export class CoordinatorError extends Error {
 export class Coordinator {
   #environment
   #physics
+  #compatibility
   #activeRequest
   #yieldControl
 
@@ -25,8 +26,9 @@ export class Coordinator {
     this.#yieldControl = yieldControl
   }
 
-  async initialize({ environmentModuleBytes, physicsModuleBytes }) {
+  async initialize({ environmentModuleBytes, physicsModuleBytes, compatibilityManifest }) {
     try {
+      validateCompatibilityManifest(compatibilityManifest)
       const [environment, physics] = await Promise.all([
         WebAssembly.instantiate(environmentModuleBytes),
         WebAssembly.instantiate(physicsModuleBytes),
@@ -41,11 +43,17 @@ export class Coordinator {
       requireExport(this.#physics, 'nightglow_first_slice_output_len')
       requireExport(this.#physics, 'nightglow_physics_release_output')
       if (this.#environment.nightglow_environment_abi_revision() !== 1
-        || this.#physics.nightglow_physics_abi_revision() !== 1) {
+        || this.#physics.nightglow_physics_abi_revision() !== 1
+        || this.#environment.nightglow_environment_abi_revision() !== compatibilityManifest.environment_abi_revision
+        || this.#physics.nightglow_physics_abi_revision() !== compatibilityManifest.physics_abi_revision) {
         throw new CoordinatorError('incompatible_schema', 'Unsupported Environment or Physics ABI')
       }
+      this.#compatibility = structuredClone(compatibilityManifest)
       return this.capabilities()
     } catch (error) {
+      this.#environment = undefined
+      this.#physics = undefined
+      this.#compatibility = undefined
       if (error instanceof CoordinatorError) throw error
       throw new CoordinatorError('runtime_failure', `Unable to initialize Wasm modules: ${error}`)
     }
@@ -56,6 +64,9 @@ export class Coordinator {
       protocolRevision: PROTOCOL_REVISION,
       environmentAbiRevision: 1,
       physicsAbiRevision: 1,
+      compatibilityManifestRevision: this.#compatibility?.manifest_revision,
+      physicsModelRevision: this.#compatibility?.physics_model_revision,
+      physicsDataManifestId: this.#compatibility?.physics_data_manifest_id,
       transferableBuffers: true,
       wasmThreads: false,
       sharedArrayBuffer: typeof SharedArrayBuffer !== 'undefined' && globalThis.crossOriginIsolated === true,
@@ -87,7 +98,7 @@ export class Coordinator {
     this.#activeRequest = token
     try {
       await this.#stage(token, request, STAGES[0], onProgress)
-      validateRequest(request)
+      validateRequest(request, this.#compatibility)
       const environmentSummary = this.#summarizeEnvironment(request)
 
       await this.#stage(token, request, STAGES[1], onProgress)
@@ -106,7 +117,7 @@ export class Coordinator {
         physicsDataManifestId: request.scenario.physics_data_manifest_id,
         coherentBarrier: 'coarse_complete',
         projection: request.scenario.output.projection,
-        shape: [2, 4, 3],
+        shape: [...this.#compatibility.shape],
         componentType: 'float32',
         quantity: 'spectral-response-integrated-radiance',
         unit: 'W m-2 sr-1',
@@ -191,7 +202,7 @@ function requireExport(exports, name) {
   return value
 }
 
-function validateRequest(request) {
+function validateRequest(request, compatibility) {
   const { scenario, emission, atmosphere } = request
   if (!request.requestId || !scenario || !emission || !atmosphere) {
     throw new CoordinatorError('invalid_units_or_coordinates', 'Incomplete coordinator request')
@@ -201,7 +212,16 @@ function validateRequest(request) {
     || scenario.scenario_revision < 1
     || scenario.emission_release_id !== emission.emission_release_id
     || scenario.atmosphere_release_id !== atmosphere.atmosphere_release_id
-    || scenario.atmosphere_selection.valid_time_utc !== atmosphere.valid_time_utc) {
+    || scenario.atmosphere_selection?.valid_time_utc !== atmosphere.valid_time_utc
+    || scenario.observer_scenario_schema_revision !== compatibility.observer_scenario_schema_revision
+    || scenario.emission_release_id !== compatibility.emission_release_id
+    || scenario.atmosphere_release_id !== compatibility.atmosphere_release_id
+    || scenario.requested_time_utc !== compatibility.atmosphere_valid_time_utc
+    || scenario.atmosphere_selection?.valid_time_utc !== compatibility.atmosphere_valid_time_utc
+    || scenario.physics_model_revision !== compatibility.physics_model_revision
+    || scenario.physics_data_manifest_id !== compatibility.physics_data_manifest_id
+    || scenario.atmosphere_optics_model_revision !== compatibility.atmosphere_optics_model_revision
+    || scenario.surface_terrain_product_id !== compatibility.surface_terrain_product_id) {
     throw new CoordinatorError('incompatible_semantics', 'Scenario dependencies do not match Environment inputs')
   }
   if (emission.unit !== 'nW cm-2 sr-1'
@@ -210,9 +230,39 @@ function validateRequest(request) {
     || atmosphere.pressure_pa.length !== atmosphere.column_count * atmosphere.geometric_height_m.length) {
     throw new CoordinatorError('invalid_units_or_coordinates', 'Invalid Environment units or shapes')
   }
-  if (scenario.output?.azimuth_samples !== 4
-    || scenario.output?.elevation_samples !== 2
-    || scenario.resource_budget?.memory_bytes < 24 * Float32Array.BYTES_PER_ELEMENT) {
+  if (scenario.output?.projection !== compatibility.projection
+    || scenario.output?.azimuth_samples !== compatibility.shape[1]
+    || scenario.output?.elevation_samples !== compatibility.shape[0]
+    || scenario.resource_budget?.memory_bytes < productValueCount(compatibility) * Float32Array.BYTES_PER_ELEMENT) {
     throw new CoordinatorError('resource_exhausted', 'The fixture output shape or memory budget is unsupported')
   }
+}
+
+function validateCompatibilityManifest(manifest) {
+  if (!manifest
+    || manifest.manifest_revision !== 'nightglow-runtime-compatibility-fixture-v1'
+    || manifest.content_license !== 'CC0-1.0'
+    || manifest.protocol_revision !== PROTOCOL_REVISION
+    || manifest.environment_abi_revision !== 1
+    || manifest.physics_abi_revision !== 1
+    || typeof manifest.observer_scenario_schema_revision !== 'string'
+    || typeof manifest.emission_release_id !== 'string'
+    || typeof manifest.atmosphere_release_id !== 'string'
+    || typeof manifest.atmosphere_valid_time_utc !== 'string'
+    || typeof manifest.physics_model_revision !== 'string'
+    || typeof manifest.physics_data_manifest_id !== 'string'
+    || typeof manifest.atmosphere_optics_model_revision !== 'string'
+    || typeof manifest.surface_terrain_product_id !== 'string'
+    || typeof manifest.projection !== 'string'
+    || !Array.isArray(manifest.shape)
+    || manifest.shape.length !== 3
+    || manifest.shape.some((value) => !Number.isSafeInteger(value) || value < 1)
+    || manifest.shape[2] !== 3
+    || manifest.shape.reduce((count, value) => count * value, 1) !== 24) {
+    throw new CoordinatorError('incompatible_schema', 'Invalid runtime compatibility manifest')
+  }
+}
+
+function productValueCount(compatibility) {
+  return compatibility.shape.reduce((count, value) => count * value, 1)
 }

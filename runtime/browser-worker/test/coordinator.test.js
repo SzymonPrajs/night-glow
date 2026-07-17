@@ -12,6 +12,7 @@ async function initializedCoordinator() {
   await coordinator.initialize({
     environmentModuleBytes: await moduleBytes('packages/environment/target/wasm32-unknown-unknown/release/environment_wasm.wasm'),
     physicsModuleBytes: await moduleBytes('packages/physics/target/wasm32-unknown-unknown/release/nightglow_wasm.wasm'),
+    compatibilityManifest: await loadJson('runtime/browser-worker/fixtures/v1/runtime-compatibility-manifest.json'),
   })
   return coordinator
 }
@@ -92,6 +93,28 @@ test('rejects a budget that cannot hold the coherent product', async () => {
   await assert.rejects(
     coordinator.commitScenario(request),
     (error) => error instanceof CoordinatorError && error.category === 'resource_exhausted',
+  )
+})
+
+test('rejects Physics identity drift before executing the pinned module', async () => {
+  const coordinator = await initializedCoordinator()
+  const request = await fixtureRequest()
+  request.scenario.physics_model_revision = 'unregistered-model-v2'
+  await assert.rejects(
+    coordinator.commitScenario(request),
+    (error) => error instanceof CoordinatorError && error.category === 'incompatible_semantics',
+  )
+  assert.equal(coordinator.diagnostics().retainedEnvironmentInputValues, 0)
+})
+
+test('fails closed when the runtime compatibility manifest is absent', async () => {
+  const coordinator = new Coordinator()
+  await assert.rejects(
+    coordinator.initialize({
+      environmentModuleBytes: await moduleBytes('packages/environment/target/wasm32-unknown-unknown/release/environment_wasm.wasm'),
+      physicsModuleBytes: await moduleBytes('packages/physics/target/wasm32-unknown-unknown/release/nightglow_wasm.wasm'),
+    }),
+    (error) => error instanceof CoordinatorError && error.category === 'incompatible_schema',
   )
 })
 

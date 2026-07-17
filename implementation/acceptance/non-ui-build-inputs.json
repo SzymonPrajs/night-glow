@@ -10,6 +10,7 @@
     "packages/environment/Cargo.lock": "440e747c92b8bad4f9d3766df04b985d6ba276ab1f3de84a60b5f9005ebbb71a",
     "packages/physics/Cargo.lock": "7d36905eb25ecca02a06506e6b7ed1ca7e99eade8b0eb201c0256bec5ff080ab",
     "runtime/browser-worker/package-lock.json": "9a10a519315a0c69ba2428c3206463a8301c123371f54f6742cae3f91d0126a3",
+    "runtime/browser-worker/fixtures/v1/runtime-compatibility-manifest.json": "da30df184d52beeeea9d4d4dde95a0c69989f888b74b48b1e9378531b21f6d68",
     "packages/contracts/fixtures/v1/manifest.json": "9b3c68b89d430fb7fa3ef4c0245edfcd9dff74d6bedfcce1c6595903b405dce4",
     "packages/physics/fixtures/jpl-horizons-v1.json": "98327dadae2008c4d4267159b73adeaa071abe3a134d3ab9a203f66a79af46c0",
     "packages/physics/fixtures/v1/physics-data-manifest.json": "feba9d6b8743fd06e9d16eab396f0f07d68d0ca210bb9331c66b618c624f794c",

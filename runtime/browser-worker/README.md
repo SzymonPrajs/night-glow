@@ -60,6 +60,9 @@ are discarded before they can mutate Viewer state.
 ```text
 runtime/browser-worker/
 ├── README.md                 this reviewed boundary
+├── fixtures/v1/
+│   └── runtime-compatibility-manifest.json
+│                             pinned fixture identity allow-list
 ├── package.json              dependency-free Node protocol tests
 ├── src/
 │   ├── coordinator.js        testable runtime lifecycle and Wasm host
@@ -69,13 +72,14 @@ runtime/browser-worker/
 ```
 
 The coordinator instantiates the independently built Environment and Physics
-Wasm modules, validates ABI revisions, transfers one field-sized Environment
-buffer, publishes progress at bounded cancellation points, rejects superseded
-work, explicitly invalidates Wasm request/output views on success and failure,
-and returns a copied coherent float product with memory accounting. Repeated
-scenario tests verify stable linear-memory size after warm-up. The worker wrapper
-transfers product-buffer ownership to its caller and maps failures to stable
-categories.
+Wasm modules, validates ABI revisions plus an immutable compatibility manifest,
+and rejects unregistered Environment/Physics/data/terrain identities before
+execution. It transfers one field-sized Environment buffer, publishes progress
+at bounded cancellation points, rejects superseded work, explicitly invalidates
+Wasm request/output views on success and failure, and returns a copied coherent
+float product with memory accounting. Repeated scenario tests verify stable
+linear-memory size after warm-up. The worker wrapper transfers product-buffer
+ownership to its caller and maps failures to stable categories.
 
 The implementation is deliberately fixture-sized. It does not fetch provider
 assets, manage production release handles/caches, run threads, or contain a

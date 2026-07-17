@@ -23,6 +23,12 @@
   ],
   "assets": [
     {
+      "path": "runtime/browser-worker/fixtures/v1/runtime-compatibility-manifest.json",
+      "license": "CC0-1.0 synthetic fixture",
+      "redistribution_status": "redistributable",
+      "sha256": "da30df184d52beeeea9d4d4dde95a0c69989f888b74b48b1e9378531b21f6d68"
+    },
+    {
       "path": "packages/contracts/fixtures/v1/manifest.json",
       "license": "CC0-1.0",
       "redistribution_status": "redistributable",

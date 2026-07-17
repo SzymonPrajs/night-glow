@@ -19,7 +19,11 @@ The committed dependency identities are:
 - terrain product `surface-terrain:fixture-flat-lambertian:v1`;
 - observer scenario schema `observer-scenario-fixture-v1`, revision 1;
 - coherent product schema `observer-render-fixture-v1` and fixture ABI
-  `physics-abi-fixture-v1`.
+  `physics-abi-fixture-v1`;
+- runtime compatibility manifest
+  `nightglow-runtime-compatibility-fixture-v1`, which fail-closes on drift in
+  protocol, Wasm ABI, release, time, Physics/data/optics, terrain, projection,
+  or output-shape identities before execution.
 
 ## Executed evidence
 
@@ -33,8 +37,8 @@ The committed dependency identities are:
 | Physics precompute orchestration | `cargo run --release --manifest-path packages/physics/Cargo.toml -p nightglow-precompute -- fixture-report` | consumes both independent Environment releases plus Physics manifest/terrain/scenario identities and emits a stable coherent 2×4×3 product summary through the shared solver |
 | Physics reference solve | `cargo run --release --manifest-path packages/physics/Cargo.toml -p nightglow-validation` | 24 coherent `f32` values match the language-neutral fixture with maximum relative error `4.094373956018e-8`; fine vertical error is `2.793967610559e-7`; the spherical horizon integral is `33.969905248062` with `3.974197714376e-15` refinement drift; 3 libRadtran DISORT pure-absorption cases agree within `6.642263376598e-8` |
 | dual Wasm boundary | `make wasm-probe` | Environment/Physics modules are 25,887/206,398 bytes; each begins at 1,114,112 bytes; scalar drift is 0 and product drift is `4.094373906582405e-8` |
-| coordinator lifecycle | `make coordinator-test` | 7 tests pass: coherent dual-Wasm output, cancellation under the 100 ms budget, stale-result rejection, unit failure, memory-budget failure, explicit buffer release on success/failure, and stable linear memory across 100 scenarios |
-| reproducible inputs and licences | `make reproducibility-check` | exact Node/Rust versions, 12 build/asset hashes and 7 asset licence records pass; all 6 libRadtran reference-input/output artifact hashes pass; the JPL snapshot and source-code distribution remain explicitly review-required |
+| coordinator lifecycle | `make coordinator-test` | 9 tests pass: coherent dual-Wasm output, cancellation under the 100 ms budget, stale-result rejection, unit failure, memory-budget failure, fail-closed runtime-manifest and Physics-identity checks, explicit buffer release on success/failure, and stable linear memory across 100 scenarios |
+| reproducible inputs and licences | `make reproducibility-check` | exact Node/Rust versions, 13 build/asset hashes and 8 asset licence records pass; all 6 libRadtran reference-input/output artifact hashes pass; the JPL snapshot and source-code distribution remain explicitly review-required |
 | non-UI CI surface | `make non-ui-check` | documentation, fixtures, input hashes, formatting, both Rust workspaces, dual Wasm parity and coordinator tests pass in one command |
 
 ## Error accounting
