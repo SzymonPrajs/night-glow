@@ -44,7 +44,7 @@ an explicitly bounded parallel feasibility experiment.
 
 ## Governing rules
 
-1. The [unified system contract](../docs/system-contract.md) owns cross-project
+1. The [unified system contract](../packages/contracts/README.md) owns cross-package
    vocabulary, product identities, scenario semantics and lifecycle boundaries.
 2. Environment reconstructs scientific input fields; Physics owns physical
    conversion and transport; Viewer owns interaction, WebGL resources and display
@@ -96,9 +96,11 @@ State: **active**
 - [x] Define the shared product graph, names, revisions, scenario, worker lifecycle,
   validity axes and ownership order in the unified system contract.
 - [x] Create detailed Environment emission/atmosphere, Physics and Viewer plans.
-- [ ] Decide whether the project/folder is finally named `environment/` or
-  `environment-atlas/`; perform the rename before Rust packages or deployment
-  paths make it expensive.
+- [x] Fix the final package name and path as `packages/environment/`; move the
+  reference application, production Viewer plan, contracts, Physics, worker,
+  data policy, and repository tooling into explicit top-level boundaries.
+- [x] Establish the root `Makefile`, toolchain declarations, safe database and
+  Vercel adapters, and repo-local Codex setup as the common operational surface.
 - [ ] Resolve every P0 open decision that changes the first schemas, physical
   quantities, solver family, spectral basis, browser baseline or data licence.
 - [ ] Select the first small open conformance fixtures and record their source,
@@ -143,6 +145,8 @@ State: **planned**
   separate emission and atmosphere package families.
 - [ ] Create the Physics Rust workspace with core, astronomy, data, physics,
   solver, validation and Wasm packages.
+- [ ] Implement `runtime/browser-worker/` as the independent coordinator module-worker
+  package with capability, lifecycle, cancellation, transfer, and memory tests.
 - [ ] Freeze the first machine-readable Environment and Physics/Viewer schemas and
   revision rules from the system contract.
 - [ ] Implement typed quantities, units, coordinates, times, identifiers,
@@ -201,8 +205,8 @@ State: **planned**
 Gate: regional Environment products are scientifically interpretable,
 reproducible, independently releasable and queryable within browser budgets.
 
-Detailed owners: [emission roadmap](../environment-atlas/docs/12-implementation-roadmap.md)
-and [atmosphere roadmap](../environment-atlas/docs/atmosphere/07-roadmap-and-todo.md).
+Detailed owners: [emission roadmap](../packages/environment/docs/emission/implementation-roadmap.md)
+and [atmosphere roadmap](../packages/environment/docs/atmosphere/roadmap-and-todo.md).
 
 ## M5 — Physics v1
 
@@ -228,8 +232,8 @@ State: **planned**
 Gate: Physics produces reproducible observer products with quantified numerical
 error for the regional Environment v1 fixtures.
 
-Detailed owner: [Physics roadmap](../physics/ROADMAP.md) and
-[Physics TODO](../physics/TODO.md).
+Detailed owner: [Physics roadmap](../packages/physics/docs/governance/roadmap.md) and
+[Physics TODO](../packages/physics/docs/governance/todo.md).
 
 ## M6 — Viewer v1
 
@@ -253,8 +257,8 @@ State: **planned**
 Gate: the two-view product is usable with regional v1 products and contains no
 scientific calculation in UI or shader convenience code.
 
-Detailed owner: [Viewer roadmap](../viewer/ROADMAP.md) and
-[Viewer TODO](../viewer/TODO.md).
+Detailed owner: [Viewer roadmap](../apps/viewer/docs/delivery/roadmap.md) and
+[Viewer TODO](../apps/viewer/docs/delivery/todo.md).
 
 ## M7 — Integrated physical-fidelity expansion
 
@@ -368,13 +372,14 @@ finished.
 
 ## Detailed plan index
 
-- [Unified system contract](../docs/system-contract.md)
-- [Environment architecture](../environment-atlas/docs/20-environment-architecture.md)
-- [Environment emission roadmap](../environment-atlas/docs/12-implementation-roadmap.md)
-- [Environment atmosphere roadmap](../environment-atlas/docs/atmosphere/07-roadmap-and-todo.md)
-- [Physics computation DAG](../physics/COMPUTATION_DAG.md)
-- [Physics roadmap](../physics/ROADMAP.md)
-- [Physics validation plan](../physics/docs/VALIDATION_PLAN.md)
-- [Viewer roadmap](../viewer/ROADMAP.md)
-- [Viewer validation plan](../viewer/VALIDATION.md)
-- [Viewer Vercel plan](../viewer/VERCEL_DEPLOYMENT.md)
+- [Unified system contract](../packages/contracts/README.md)
+- [Environment architecture](../packages/environment/docs/architecture/workspace.md)
+- [Environment emission roadmap](../packages/environment/docs/emission/implementation-roadmap.md)
+- [Environment atmosphere roadmap](../packages/environment/docs/atmosphere/roadmap-and-todo.md)
+- [Physics computation DAG](../packages/physics/docs/architecture/computation-dag.md)
+- [Physics roadmap](../packages/physics/docs/governance/roadmap.md)
+- [Physics validation plan](../packages/physics/docs/governance/validation-plan.md)
+- [Coordinator worker boundary](../runtime/browser-worker/README.md)
+- [Viewer roadmap](../apps/viewer/docs/delivery/roadmap.md)
+- [Viewer validation plan](../apps/viewer/docs/delivery/validation.md)
+- [Viewer Vercel plan](../apps/viewer/docs/delivery/vercel-deployment.md)

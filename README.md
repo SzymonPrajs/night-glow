@@ -1,52 +1,102 @@
 # Night Glow
 
-An interactive observer-first night-sky and light-pollution explorer. Pick a location on the map, tune atmospheric scattering, and inspect the resulting sky in 3D.
+Night Glow is a planned browser system for reconstructing environmental inputs,
+computing physically based sky radiance, and exploring the result from a globe or
+an observer on Earth. The repository is being organized before implementation so
+that data production, physics, browser orchestration, and rendering can evolve
+independently without duplicating scientific logic.
 
-The map and atmosphere controls live in edge drawers: hover either side to inspect them temporarily, or use the pin control to keep a drawer open across visits.
+## Repository layout
 
-## Run locally
+```text
+Night Glow/
+├── apps/
+│   ├── viewer/             production two-view application plan
+│   └── reference-viewer/   runnable TypeScript/Vite baseline
+├── packages/
+│   ├── contracts/          canonical cross-package vocabulary and protocols
+│   ├── environment/        Rust environment reconstruction and Wasm decoding
+│   └── physics/            Rust physics, astronomy, solvers, and Wasm bindings
+├── runtime/
+│   └── browser-worker/     browser/Wasm scheduling and memory ownership
+├── data/                   policy for local inputs, fixtures, and generated data
+├── tools/                  future repository-wide build and release orchestration
+└── implementation/         living system-level implementation checklist
+```
+
+The intended dependency direction is:
+
+```mermaid
+flowchart LR
+  E["Environment releases"] --> P["Physics observer products"]
+  E --> V["Viewer globe layers"]
+  P --> V
+  C["Shared contracts"] --> E
+  C --> P
+  C --> W["Coordinator worker"]
+  C --> V
+  W --> E
+  W --> P
+  W --> V
+```
+
+The worker coordinates independently versioned Wasm modules; it does not own
+scientific equations. The Viewer owns WebGL resources and display transforms; it
+does not calculate physics. Heavy global ingestion and precomputation stay in
+native Rust tools, while browser computation is regional, bounded, asynchronous,
+and cancellable.
+
+## Start here
+
+- [Implementation master plan](implementation/README.md) — system order and gates.
+- [Unified contracts](packages/contracts/README.md) — canonical products, scenario,
+  revisions, ownership, and runtime lifecycle.
+- [Environment](packages/environment/README.md) — emission and atmospheric-state
+  reconstruction.
+- [Physics](packages/physics/README.md) — astronomy, radiative transfer, PSF, and
+  observer products.
+- [Coordinator worker](runtime/browser-worker/README.md) — browser/Wasm scheduling and
+  memory boundary.
+- [Viewer](apps/viewer/README.md) — production globe and observer application plan.
+- [Reference viewer](apps/reference-viewer/README.md) — existing runnable baseline.
+- [Data policy](data/README.md) and [tooling boundary](tools/README.md).
+
+## Run the reference viewer
 
 ```bash
-npm install
+cd apps/reference-viewer
+npm ci
 npm run dev
 ```
 
-Create a production build with `npm run build` and check the source with `npm run lint`.
+## Root commands
 
-Run the deterministic conservation/direction benchmark with `npm run test:physics`, the four-site central-Poland calibration with `npm run test:calibration`, and every shipped atmosphere with `npm run test:weather`. `npm run test:weather:regional` performs the slower full-resolution Warsaw sweep. Run the real browser/worker progress flow with `npm run test:e2e` (install Chromium once with `npx playwright install chromium`).
+The repository has one operational surface for local work, Codex, and CI:
 
-## What is modeled
+```bash
+make help               # list commands
+make setup              # verify tools, install locked web dependencies, prepare Rust/Wasm
+make dev                # launch the currently implemented website
+make build              # build implemented web, native Rust, and Wasm targets
+make check              # links, lint, web build, Rust checks, database status
+make test               # deterministic reference-model verification
+make db-migrate         # safe no-op until a database is introduced
+make deploy-preview     # validated Vercel preview
+make deploy-production  # validated Vercel production deployment
+make clean              # generated build output
+make clean-all          # build output plus installed Node dependencies
+```
 
-- A bundled regional layer supplies uniformly emissive, extended settlement footprints out to 1000 km. The runtime analysis is deterministic and never waits for a live map-data survey.
-- Every settlement ellipse is integrated by equal-area geometry quadrature into 81 observer-centred distance rings, 720 half-degree bearings, and eight spectral bands. Flux is conserved per band and cities remain spread across their full angular width.
-- Atmospheric radiance is solved on 22 observer-centred elevations: 0.125° spacing at the horizon, progressively expanding to 15° near the zenith. Panning and zooming reuse the same cached full-hemisphere field.
-- A curved-Earth radiative-transfer kernel models Rayleigh, aerosol, humidity, cloud, cloud/ground feedback, two-leg extinction, and a bounded multiple-scattering approximation. A positive zero-padded FFT convolution turns the ring grid into a full directional sky field.
-- The expensive kernel and Fourier plan are cached in a Web Worker. Every shipped preset loads an exact precomputed 715 KiB transfer kernel; Custom states use the live curved-Earth solver. Panning and zooming never recompute the model, weather changes reuse the observer's source grid, and location changes rebuild it. All paths report real component progress while the UI remains responsive.
-- Eight weather presets cover crisp and typical clear air, humid air, winter smog, thin cirrus, broken low cloud, low overcast, and snow overcast. Twelve scattering parameters plus zenith seeing and effective upper wind remain available under the secondary **Custom** tab.
-- Daylight and civil, nautical, or astronomical twilight are labeled explicitly. A Bortle class is shown only during astronomical darkness, so a bright July frame is not misreported as a night-sky class.
-- Astronomy Engine supplies time- and observer-specific positions for the Sun, Moon, and planets. The bundled CDS/VizieR Yale Bright Star Catalogue supplies 8,404 catalogued stars through visual magnitude 6.5, including J2000 positions, Johnson V and B−V photometry, and MK spectral classifications.
-- Every catalogue star is rendered through the same unit-integral angular Gaussian PSF. Zenith seeing, air mass, wavelength, and the live camera scale determine its FWHM and peak; B−V sets colour, upper wind sets coherence time, and aerosols, humidity, clouds, and atmospheric dispersion remain separate extinction/scatter effects. The settings drawer previews the current PSF from the same calculation.
-- Directional sky quality and limiting magnitude feed the visibility of stars, the Milky Way, clusters, nebulae, galaxies, and planets. Moonlight and twilight are applied separately.
-- A persistent continuous **Realistic → Enhanced** presentation slider changes only how the solved sky is displayed. Realistic uses natural low-light colour and restrained point-spread functions; Enhanced monotonically compresses visual dynamic range, lifting faint stars more than bright ones without reversing their brightness ordering. The physical worker result, directional limits, metrics, object eligibility, summary values, and visible-star count are strict invariants across the entire slider.
+Until `apps/viewer/package.json` exists, web commands intentionally target the
+runnable reference viewer. They switch automatically to the production Viewer
+when its implementation is created. Deployment uses Vercel's documented `--cwd`
+flow and requires an authenticated CLI; credentials are never stored here.
 
-The presentation architecture keeps both endpoint GPU resources stable and treats slider movement as a uniform-only update: it must not rerun the solver, rebuild eligibility, or recreate the canvas. Existing `night-glow:appearance-mode` values migrate to the continuous `night-glow:sky-enhancement` setting (`realistic` → 0, `atlas` → 1); malformed values fall back to Realistic.
+The repo-local Codex environment is
+[`.codex/environments/environment.toml`](.codex/environments/environment.toml),
+with Run, Build, Validate, Database Migration, and Preview Deployment actions.
+The current application needs no runtime secrets; future variables must follow
+[`.env.example`](.env.example).
 
-The complete equations, central-Poland calibration, conservation rules, cache design, performance measurements, verification, and limitations are in [docs/physical-glow-model.md](docs/physical-glow-model.md). The regional proxy is fitted to four clear-sky zenith anchors, but it remains an exploratory estimate rather than calibrated photometry or a substitute for an all-sky light-pollution survey.
-
-Map tiles © OpenStreetMap contributors, available under the ODbL.
-
-Star data: Bright Star Catalogue, 5th Revised Ed. (Hoffleit & Warren, 1991), catalogue V/50 via CDS/VizieR.
-
-## Reviewed future architecture
-
-The current Vite application remains the runnable baseline. Its planned replacement is documentation-first and split into three independently reviewable projects:
-
-The living execution order and top-level completion checklist are maintained in the [implementation master plan](implementation/README.md). This is the system tracker to update as milestones pass; detailed domain roadmaps remain subordinate to its integration gates.
-
-The cross-project vocabulary, product graph, scenario schema, runtime interfaces and ownership order are defined by the [unified system contract](docs/system-contract.md).
-
-- [Environment Atlas](environment-atlas/README.md) reconstructs separately versioned surface-emission and four-dimensional atmospheric-state products from open evidence.
-- [Physics](physics/README.md) converts those products into spectral sources/optical state and performs astronomy, curved-Earth radiative transfer, PSF and observer-radiance calculations in shared native/Rust-Wasm code.
-- [Viewer](viewer/README.md) defines the new globe and sky-at-pin experiences, WebGL2 renderers, worker protocols, Vercel delivery and migration from this app.
-
-These folders currently contain research, contracts, decisions, validation gates and implementation roadmaps only. They do not replace the running TypeScript application yet.
+The planning packages and runtime contain documentation and reserved workspace shapes;
+they do not yet replace the reference implementation.

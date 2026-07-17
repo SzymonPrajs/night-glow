@@ -1,0 +1,33 @@
+version = 1
+name = "night-glow"
+
+[setup]
+script = '''
+set -eu
+make setup
+'''
+
+[[actions]]
+name = "Run website"
+icon = "run"
+command = "make dev"
+
+[[actions]]
+name = "Build everything"
+icon = "run"
+command = "make build"
+
+[[actions]]
+name = "Validate"
+icon = "run"
+command = "make check"
+
+[[actions]]
+name = "Database migrations"
+icon = "run"
+command = "make db-migrate"
+
+[[actions]]
+name = "Deploy preview"
+icon = "run"
+command = "make deploy-preview"

@@ -3,3 +3,17 @@ dist/
 output/
 *.tsbuildinfo
 .DS_Store
+target/
+.wasm-pack/
+.next/
+.turbo/
+.vercel/
+coverage/
+playwright-report/
+test-results/
+packages/*/bindings/wasm/pkg/
+data/raw/
+data/staging/
+data/generated/
+data/cache/
+artifacts/
