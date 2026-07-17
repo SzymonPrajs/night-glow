@@ -8,6 +8,7 @@ const schemaRoot = fileURLToPath(new URL('../packages/contracts/schemas/v1/', im
 const load = async (name) => JSON.parse(await readFile(`${fixtureRoot}${name}`, 'utf8'))
 const loadSchema = async (name) => JSON.parse(await readFile(`${schemaRoot}${name}.schema.json`, 'utf8'))
 const manifest = await load('manifest.json')
+const acceptance = JSON.parse(await readFile(new URL('../implementation/acceptance/m0-first-slice.json', import.meta.url), 'utf8'))
 for (const [name, expectedHash] of Object.entries(manifest.files)) {
   const bytes = await readFile(`${fixtureRoot}${name}`)
   assert.equal(createHash('sha256').update(bytes).digest('hex'), expectedHash)
@@ -40,13 +41,18 @@ for (const [key, name] of Object.entries(schemaNames)) {
 }
 
 assert.equal(conventions.fixture_revision, 'nightglow-fixture-v1')
+assert.equal(acceptance.acceptance_revision, 'nightglow-m0-acceptance-v1')
+assert.equal(acceptance.contract_fixture_revision, conventions.fixture_revision)
 assert.equal(conventions.license, 'CC0-1.0')
 assert.equal(conventions.spectral_basis.bands.length, 8)
 
 const intensity = emission.cells.reduce((sum, cell) => {
   assert.ok(['valid', 'missing', 'masked', 'censored', 'not_covered'].includes(cell.data_validity))
   const expected = cell.j_dnb_nw_cm2_sr * 1e-5 * cell.support_area_m2
-  assert.ok(Math.abs(expected - cell.directional_intensity_w_sr) <= Math.max(1, expected) * 1e-12)
+  assert.ok(
+    Math.abs(expected - cell.directional_intensity_w_sr)
+      <= Math.max(1, expected) * acceptance.numeric.emission_directional_intensity_relative_error_max,
+  )
   return sum + cell.directional_intensity_w_sr
 }, 0)
 assert.equal(intensity, emission.total_directional_intensity_w_sr)
@@ -60,7 +66,8 @@ for (const variable of Object.values(atmosphere.variables)) assert.equal(variabl
 for (let column = 0; column < latitudeCount * longitudeCount; column += 1) {
   const offset = column * heightCount
   const pressure = atmosphere.variables.pressure_pa.values.slice(offset, offset + heightCount)
-  assert.ok(pressure.every((value, index) => index === 0 || value < pressure[index - 1]))
+  const violations = pressure.filter((value, index) => index > 0 && value >= pressure[index - 1]).length
+  assert.ok(violations <= acceptance.numeric.atmosphere_pressure_monotonic_violations_max)
 }
 
 const emissionDisplay = display.products.find((product) => product.source_domain === 'emission')

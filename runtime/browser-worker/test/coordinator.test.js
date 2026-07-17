@@ -6,6 +6,8 @@ import { Coordinator, CoordinatorError } from '../src/coordinator.js'
 const root = new URL('../../../', import.meta.url)
 const loadJson = async (path) => JSON.parse(await readFile(new URL(path, root), 'utf8'))
 const moduleBytes = async (path) => readFile(new URL(path, root))
+const acceptance = await loadJson('implementation/acceptance/m0-first-slice.json')
+const combinedWasmMemoryLimitBytes = acceptance.runtime.wasm_initial_memory_mib_max * 2 * 1_048_576
 
 async function initializedCoordinator(coordinator = new Coordinator()) {
   await coordinator.initialize({
@@ -52,9 +54,9 @@ test('coordinates Environment and Physics Wasm into one coherent product', async
   assert.equal(product.scenarioRevision, 1)
   assert.equal(product.values.length, expected.values.length)
   const maximumError = Math.max(...product.values.map((value, index) => Math.abs(value - expected.values[index]) / expected.values[index]))
-  assert.ok(maximumError < 1e-6)
-  assert.ok(product.values.buffer.byteLength < 1_048_576)
-  assert.ok(product.memoryHighWaterBytes <= 32 * 1_048_576)
+  assert.ok(maximumError <= acceptance.numeric.render_f32_roundtrip_relative_error_max)
+  assert.ok(product.values.buffer.byteLength <= acceptance.runtime.transferred_fixture_bytes_max)
+  assert.ok(product.memoryHighWaterBytes <= combinedWasmMemoryLimitBytes)
 })
 
 test('cancels superseded work before it can publish', async () => {
@@ -64,7 +66,7 @@ test('cancels superseded work before it can publish', async () => {
   const pending = coordinator.commitScenario(request)
   coordinator.cancel(request.requestId)
   await assert.rejects(pending, (error) => error instanceof CoordinatorError && error.category === 'cancelled')
-  assert.ok(performance.now() - started < 100)
+  assert.ok(performance.now() - started < acceptance.runtime.worker_cancellation_acknowledgement_ms_max)
 })
 
 test('new scenario revision rejects the stale result', async () => {
@@ -121,7 +123,7 @@ test('releases Wasm request views after successful and rejected work', async () 
   const coordinator = await initializedCoordinator()
   await coordinator.commitScenario(await fixtureRequest())
   const successful = coordinator.diagnostics()
-  assert.ok(successful.memoryBytes <= 32 * 1_048_576)
+  assert.ok(successful.memoryBytes <= combinedWasmMemoryLimitBytes)
   assert.equal(successful.retainedEnvironmentInputValues, 0)
   assert.equal(successful.retainedEnvironmentSummaryValues, 0)
   assert.equal(successful.retainedPhysicsOutputValues, 0)

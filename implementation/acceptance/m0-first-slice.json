@@ -4,6 +4,7 @@
   "numeric": {
     "emission_directional_intensity_relative_error_max": 1e-12,
     "atmosphere_pressure_monotonic_violations_max": 0,
+    "scalar_transmittance_relative_error_max": 1e-12,
     "native_wasm_relative_error_max": 1e-6,
     "render_f32_roundtrip_relative_error_max": 1e-6,
     "psf_integral_absolute_error_max": 1e-6,
@@ -13,6 +14,7 @@
     "worker_cancellation_acknowledgement_ms_max": 100,
     "coarse_fixture_solve_ms_max": 1000,
     "wasm_initial_memory_mib_max": 16,
+    "wasm_module_bytes_max": 1048576,
     "transferred_fixture_bytes_max": 1048576,
     "owned_viewer_gpu_bytes_max": 8388608
   },
@@ -39,4 +41,3 @@
     ]
   }
 }
-

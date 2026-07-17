@@ -114,7 +114,9 @@ State: **complete**
 - [x] Freeze initial supported coordinate, height, time and wavelength conventions
   in [the fixture conventions](../packages/contracts/fixtures/v1/conventions.json).
 - [x] Define measurable accuracy, performance, memory and browser-support targets
-  in [the M0 acceptance manifest](acceptance/m0-first-slice.json).
+  in [the M0 acceptance manifest](acceptance/m0-first-slice.json); the
+  [acceptance guide](acceptance/README.md) explains why these JSON inputs are
+  tracked and which checks enforce them.
 
 Gate: the three projects can describe the same first scenario and expected
 products without an unnamed assumption, hidden default or incompatible term.

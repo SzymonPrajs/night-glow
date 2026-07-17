@@ -7,6 +7,7 @@
   "sha256": {
     ".nvmrc": "0247b8c2458efab0ee1fc22a643fab0bea14362a1a71d5a2fd6c10e04243a63e",
     "rust-toolchain.toml": "eb8ed53423a7d9d3e3b3fc0367ee89426b4b9385114465919926b2829bfe7ecd",
+    "implementation/acceptance/m0-first-slice.json": "7a86d196f8b50099f14caa6437e476dbace972458645cd2a77fb279cef7cdbe1",
     "packages/environment/Cargo.lock": "440e747c92b8bad4f9d3766df04b985d6ba276ab1f3de84a60b5f9005ebbb71a",
     "packages/physics/Cargo.lock": "2e33fb187d487e98144b95b2a9031be089afcd9a3cdc134b3a70e04f5b672c26",
     "runtime/browser-worker/package-lock.json": "9a10a519315a0c69ba2428c3206463a8301c123371f54f6742cae3f91d0126a3",

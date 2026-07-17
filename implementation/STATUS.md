@@ -36,7 +36,7 @@ The repository passed `make non-ui-check` and the canonical `make check` before
 this status was merged. The recorded non-UI checkpoint includes:
 
 - 18 Environment tests, 26 Physics tests and 12 coordinator/worker tests;
-- 13 pinned build/asset inputs and 8 licence records;
+- 14 pinned build/asset inputs and 8 licence records;
 - 70 W sr^-1 conserved fixture directional intensity and 99,850 Pa mean fixture
   surface pressure;
 - Environment and Physics Wasm sizes of 25,887 and 317,380 bytes, each starting
@@ -55,6 +55,19 @@ this status was merged. The recorded non-UI checkpoint includes:
 
 These figures validate the bounded fixture architecture, not a calibrated sky
 prediction.
+
+## Repository hygiene
+
+Acceptance JSON, contract/provider fixtures, independent JPL/libRadtran
+references, locked dependency graphs and the reference-viewer runtime assets are
+intentional source inputs. Their directory guides now state which checks consume
+them. Generated dependency, build, Rust target, Next, output and local-data
+trees remain ignored, and the audit found no such artifacts tracked in Git.
+
+The audit also removed 67 untracked files whose names ended in ` 2`; every one
+was byte-for-byte identical to its canonical neighbour. They were not added to
+an ignore rule, so another accidental duplicate remains visible instead of
+being silently hidden.
 
 ## Critical path from here
 

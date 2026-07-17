@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { performance } from 'node:perf_hooks'
+
+const acceptance = JSON.parse(await readFile(new URL('../implementation/acceptance/m0-first-slice.json', import.meta.url), 'utf8'))
 const paths = {
   environment: new URL('../packages/environment/target/wasm32-unknown-unknown/release/environment_wasm.wasm', import.meta.url),
   physics: new URL('../packages/physics/target/wasm32-unknown-unknown/release/nightglow_wasm.wasm', import.meta.url),
@@ -41,7 +43,7 @@ for (const [beta, scale, path, intervals] of [
   const relativeError = Math.abs(actual - expected) / Math.max(Math.abs(expected), Number.EPSILON)
   maxRelativeError = Math.max(maxRelativeError, relativeError)
 }
-assert.ok(maxRelativeError <= 1e-12)
+assert.ok(maxRelativeError <= acceptance.numeric.scalar_transmittance_relative_error_max)
 
 const fixture = JSON.parse(await readFile(new URL('../packages/contracts/fixtures/v1/observer-render-product.json', import.meta.url), 'utf8'))
 const outputPointer = instances.physics.exports.nightglow_first_slice_solve(70, 99_850)
@@ -49,7 +51,7 @@ const outputLength = instances.physics.exports.nightglow_first_slice_output_len(
 const values = new Float32Array(instances.physics.exports.memory.buffer, outputPointer, outputLength)
 const maxProductRelativeError = Math.max(...values.map((value, index) => Math.abs(value - fixture.values[index]) / fixture.values[index]))
 assert.equal(outputLength, fixture.values.length)
-assert.ok(maxProductRelativeError < 1e-6)
+assert.ok(maxProductRelativeError <= acceptance.numeric.native_wasm_relative_error_max)
 
 const environmentTotal = instances.environment.exports.nightglow_fixture_emission_total(1_000_000, 1, 2, 0, 4)
 assert.equal(environmentTotal, 70)
@@ -61,7 +63,7 @@ const report = {
   max_render_product_relative_error: maxProductRelativeError,
 }
 for (const moduleReport of Object.values(report.modules)) {
-  assert.ok(moduleReport.wasm_bytes < 1_048_576)
-  assert.ok(moduleReport.initial_memory_bytes <= 16 * 1_048_576)
+  assert.ok(moduleReport.wasm_bytes <= acceptance.runtime.wasm_module_bytes_max)
+  assert.ok(moduleReport.initial_memory_bytes <= acceptance.runtime.wasm_initial_memory_mib_max * 1_048_576)
 }
 console.log(JSON.stringify(report, null, 2))
