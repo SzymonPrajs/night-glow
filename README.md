@@ -41,6 +41,8 @@ Star data: Bright Star Catalogue, 5th Revised Ed. (Hoffleit & Warren, 1991), cat
 
 The current Vite application remains the runnable baseline. Its planned replacement is documentation-first and split into three independently reviewable projects:
 
+The living execution order and top-level completion checklist are maintained in the [implementation master plan](implementation/README.md). This is the system tracker to update as milestones pass; detailed domain roadmaps remain subordinate to its integration gates.
+
 The cross-project vocabulary, product graph, scenario schema, runtime interfaces and ownership order are defined by the [unified system contract](docs/system-contract.md).
 
 - [Environment Atlas](environment-atlas/README.md) reconstructs separately versioned surface-emission and four-dimensional atmospheric-state products from open evidence.
