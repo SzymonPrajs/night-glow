@@ -1,0 +1,7 @@
+[workspace]
+resolver = "3"
+members = []
+
+# Design phase only. Crates are intentionally absent; see
+# docs/20-environment-architecture.md and the two domain roadmaps for the
+# gated build order.

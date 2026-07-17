@@ -1,6 +1,0 @@
-[workspace]
-resolver = "3"
-members = []
-
-# Design phase only. Crates are intentionally absent; see
-# docs/12-implementation-roadmap.md for the gated build order.

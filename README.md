@@ -36,3 +36,15 @@ The complete equations, central-Poland calibration, conservation rules, cache de
 Map tiles © OpenStreetMap contributors, available under the ODbL.
 
 Star data: Bright Star Catalogue, 5th Revised Ed. (Hoffleit & Warren, 1991), catalogue V/50 via CDS/VizieR.
+
+## Reviewed future architecture
+
+The current Vite application remains the runnable baseline. Its planned replacement is documentation-first and split into three independently reviewable projects:
+
+The cross-project vocabulary, product graph, scenario schema, runtime interfaces and ownership order are defined by the [unified system contract](docs/system-contract.md).
+
+- [Environment Atlas](environment-atlas/README.md) reconstructs separately versioned surface-emission and four-dimensional atmospheric-state products from open evidence.
+- [Physics](physics/README.md) converts those products into spectral sources/optical state and performs astronomy, curved-Earth radiative transfer, PSF and observer-radiance calculations in shared native/Rust-Wasm code.
+- [Viewer](viewer/README.md) defines the new globe and sky-at-pin experiences, WebGL2 renderers, worker protocols, Vercel delivery and migration from this app.
+
+These folders currently contain research, contracts, decisions, validation gates and implementation roadmaps only. They do not replace the running TypeScript application yet.
