@@ -28,10 +28,12 @@ The committed dependency identities are:
 | contract and schema descriptors | `make contract-check` | JSON Schema declarations, SHA-256 fixture identities, cross-product IDs, units, axes, conservation, terrain and buffer lengths pass |
 | Environment native boundary | `cargo test --manifest-path packages/environment/Cargo.toml` | 10 tests pass across schema, query, validation and Wasm-adapter crates |
 | Environment conformance | `cargo run --release --manifest-path packages/environment/Cargo.toml -p environment-conformance` | 4 emission cells conserve 70 W sr^-1; queried atmosphere shape is 2×2×3 with mean surface pressure 99,850 Pa |
-| Physics native boundary | `cargo test --manifest-path packages/physics/Cargo.toml` | 6 tests pass across the independent Environment adapter, transfer functions and Wasm output |
+| Physics native boundary | `cargo test --manifest-path packages/physics/Cargo.toml` | 12 tests pass across astronomy, data, the independent Environment adapter, transfer functions, DAG scheduling/cancellation and Wasm output |
 | Physics reference solve | `cargo run --release --manifest-path packages/physics/Cargo.toml -p nightglow-validation` | 24 coherent `f32` values match the language-neutral fixture with maximum relative error `4.094373956018e-8`; fine integration error is `2.793967610559e-7` |
-| dual Wasm boundary | `make wasm-probe` | Environment/Physics modules are 25,565/26,932 bytes; each begins at 1,114,112 bytes; scalar drift is 0 and product drift is `4.094373906582405e-8` |
+| dual Wasm boundary | `make wasm-probe` | Environment/Physics modules are 25,565/192,332 bytes; each begins at 1,114,112 bytes; scalar drift is 0 and product drift is `4.094373906582405e-8` |
 | coordinator lifecycle | `make coordinator-test` | 5 tests pass: coherent dual-Wasm output, cancellation under the 100 ms budget, stale-result rejection, unit failure, and memory-budget failure |
+| reproducible inputs and licences | `make reproducibility-check` | exact Node/Rust versions, 9 build/asset hashes and 4 asset licence records pass; the JPL snapshot and source-code distribution remain explicitly review-required |
+| non-UI CI surface | `make non-ui-check` | documentation, fixtures, input hashes, formatting, both Rust workspaces, dual Wasm parity and coordinator tests pass in one command |
 
 ## Error accounting
 

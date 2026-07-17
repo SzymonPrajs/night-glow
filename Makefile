@@ -13,7 +13,7 @@ VIEWER_PROOF_DEPS := $(VIEWER_PROOF)/node_modules/.package-lock.json
 .PHONY: help doctor setup clean clean-all install dev preview build check lint test \
 	web-install web-dev web-preview web-build web-lint web-test \
 	viewer-proof-install viewer-proof-build viewer-proof-lint viewer-proof-test \
-	rust-prepare rust-check rust-test rust-build rust-wasm native-probe wasm-probe coordinator-test docs-check contract-check \
+	rust-prepare rust-format-check rust-check rust-test rust-build rust-wasm native-probe wasm-probe coordinator-test docs-check contract-check reproducibility-check non-ui-check \
 	db-status db-migrate deploy-preview deploy-production
 
 help: ## Show the root command surface.
@@ -38,7 +38,7 @@ preview: web-preview ## Preview the most recent production web build.
 
 build: web-build viewer-proof-build rust-build rust-wasm ## Build every currently implemented target.
 
-check: docs-check contract-check web-lint web-build viewer-proof-lint viewer-proof-build rust-check coordinator-test db-status ## Run non-browser repository validation.
+check: docs-check contract-check reproducibility-check web-lint web-build viewer-proof-lint viewer-proof-build rust-format-check rust-check coordinator-test db-status ## Run non-browser repository validation.
 
 lint: web-lint docs-check ## Check web source and documentation links.
 
@@ -90,11 +90,19 @@ docs-check: ## Verify every repository-local Markdown link.
 contract-check: ## Validate the language-neutral cross-package conformance fixtures.
 	@node tools/check-contract-fixtures.mjs
 
+reproducibility-check: ## Verify pinned non-UI build inputs, assets, and licence declarations.
+	@node tools/check-reproducibility.mjs
+
+non-ui-check: docs-check contract-check reproducibility-check rust-format-check rust-check rust-test wasm-probe coordinator-test ## Run the complete non-UI CI surface.
+
 rust-prepare: ## Install the standard browser Wasm target when rustup is available.
 	@./tools/rust-workspaces.sh prepare
 
 rust-check: ## Check every implemented Rust workspace.
 	@./tools/rust-workspaces.sh check
+
+rust-format-check: ## Verify formatting in every implemented Rust workspace.
+	@./tools/rust-workspaces.sh fmt
 
 rust-test: ## Test every implemented Rust workspace.
 	@./tools/rust-workspaces.sh test

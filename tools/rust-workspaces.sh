@@ -12,10 +12,10 @@ case "$mode" in
     fi
     exit 0
     ;;
-  check|test|build) ;;
+  check|test|build|fmt) ;;
   wasm) ;;
   *)
-    printf 'usage: %s prepare|check|test|build|wasm\n' "$0" >&2
+    printf 'usage: %s prepare|check|test|build|fmt|wasm\n' "$0" >&2
     exit 2
     ;;
 esac
@@ -42,8 +42,13 @@ while IFS= read -r manifest; do
     printf 'Skipping design-only empty workspace %s\n' "$manifest"
     continue
   fi
-  printf '%s %s\n' "${cargo_command[*]}" "$manifest"
-  "${cargo_command[@]}" --manifest-path "$manifest"
+  if [[ "$mode" == fmt ]]; then
+    printf 'cargo fmt --all --check %s\n' "$manifest"
+    cargo fmt --manifest-path "$manifest" --all -- --check
+  else
+    printf '%s %s\n' "${cargo_command[*]}" "$manifest"
+    "${cargo_command[@]}" --manifest-path "$manifest"
+  fi
   built=$((built + 1))
 done <<< "$manifests"
 

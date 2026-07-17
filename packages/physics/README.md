@@ -30,10 +30,10 @@ The central rule is simple:
 packages/physics/
 ├── crates/
 │   ├── nightglow-core/          units, spectra, coordinates, grids, identifiers
+│   ├── nightglow-astronomy/     pinned time-data resolution; future frames and ephemerides
+│   ├── nightglow-data/          Physics asset readers and conforming Environment adapters
+│   ├── nightglow-solver/        deterministic DAG, progress, budgets and cancellation
 │   ├── nightglow-physics/       one module per physical phenomenon
-│   ├── nightglow-astronomy/     time, frames, ephemerides, star motion, sky tiling
-│   ├── nightglow-data/          versioned loaders and calibrated data products
-│   ├── nightglow-solver/        dependency graph, caches, refinement, cancellation
 │   └── nightglow-validation/    reference cases and comparison adapters
 ├── apps/precompute/             native dataset and lookup-table compiler
 ├── bindings/wasm/               thin browser ABI; no independent physics

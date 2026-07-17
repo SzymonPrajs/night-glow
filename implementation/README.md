@@ -150,7 +150,7 @@ State: **planned**
 
 - [x] Create the Environment Rust workspace with shared core/manifest crates and
   separate emission and atmosphere package families.
-- [ ] Create the Physics Rust workspace with core, astronomy, data, physics,
+- [x] Create the Physics Rust workspace with core, astronomy, data, physics,
   solver, validation and Wasm packages.
 - [x] Implement `runtime/browser-worker/` as the independent coordinator module-worker
   package with capability, lifecycle, cancellation, transfer, and memory tests.
@@ -160,9 +160,9 @@ State: **planned**
   validity/evidence/uncertainty and structured errors before domain equations.
 - [x] Publish tiny language-neutral emission, atmosphere, Physics and Viewer
   conformance fixtures.
-- [ ] Establish native/Wasm parity tests, deterministic build manifests, licence
+- [x] Establish native/Wasm parity tests, deterministic build manifests, licence
   reports and content-addressed fixture assets.
-- [ ] Add CI for format validation, Rust tests, Wasm build/parity, documentation
+- [x] Add CI for format validation, Rust tests, Wasm build/parity, documentation
   links and compatibility fixtures.
 
 Gate: every package can decode or reject the same tiny products consistently, and
