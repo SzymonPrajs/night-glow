@@ -1,4 +1,5 @@
 import type { Atmosphere, LightSource, SkyMetrics } from '../types'
+import { moonZenithLuminanceRatio, solarZenithLuminanceRatio } from './celestialLight'
 
 export function calculateSkyMetrics(
   sources: LightSource[],
@@ -13,12 +14,16 @@ export function calculateSkyMetrics(
   const scattering = 0.5 + atmosphere.aerosol * 0.95 + atmosphere.humidity * 0.5
   const cloudBounce = 1 + atmosphere.cloud * (1.05 - atmosphere.cloudBase * 0.065) * 1.6
   const artificialGlow = Math.log1p(directGlow * 0.28) * 24 * scattering * cloudBounce
-  const twilight = clamp((sunAltitude + 18) / 18, 0, 1)
-  const glowIndex = clamp(artificialGlow + twilight * 100 + moonLight * 18, 0, 100)
-  const zenithMag = clamp(21.92 - 5.05 * Math.pow(glowIndex / 100, 0.78), 16.2, 21.92)
+  const solarRatio = solarZenithLuminanceRatio(sunAltitude)
+  const lunarRatio = moonZenithLuminanceRatio(moonLight)
+  const celestialPenalty = 1.45 * Math.log10(1 + solarRatio + lunarRatio)
+  const artificialRatio = Math.max(0, 10 ** (artificialGlow / 18) - 1)
+  const brightnessRatio = 1 + artificialRatio + solarRatio + lunarRatio
+  const zenithMag = clamp(21.92 - 2.5 * Math.log10(brightnessRatio), 3, 21.92)
+  const glowIndex = clamp((21.92 - zenithMag) / 18.92 * 100, 0, 100)
   const limitingMagnitude = clamp(
-    7.15 - glowIndex * 0.045 - atmosphere.cloud * 2.45 - atmosphere.humidity * 0.22 - twilight * 2.1,
-    0.7,
+    7.15 - artificialGlow * 0.045 - atmosphere.cloud * 2.45 - atmosphere.humidity * 0.22 - celestialPenalty,
+    0,
     7.15,
   )
   const visibleStars = Math.round(clamp(11 * Math.pow(2, 1.05 * (limitingMagnitude + 1)), 18, 4700))

@@ -1,39 +1,41 @@
 import { useRef, useState, type KeyboardEvent } from 'react'
-import { Activity, Cloud, CloudFog, Droplets, Gauge, Layers3, MountainSnow, Sparkles, SunMedium, Wind } from 'lucide-react'
+import { Activity, Cloud, CloudFog, Droplets, Focus, Gauge, Layers3, MountainSnow, Sparkles, SunMedium, Wind } from 'lucide-react'
 import type { PhysicalGlowAnalysisState } from '../hooks/usePhysicalGlow'
 import { findWeatherPreset, WEATHER_PRESETS } from '../lib/weatherPresets'
-import type { AppearanceMode, Atmosphere } from '../types'
+import type { Atmosphere, SeeingConditions } from '../types'
+import PsfPreview from './PsfPreview'
 
 type SettingsPanelProps = {
   atmosphere: Atmosphere
-  analysis: Pick<PhysicalGlowAnalysisState, 'status' | 'progress' | 'stage'>
-  appearanceMode: AppearanceMode
-  onAppearanceModeChange: (mode: AppearanceMode) => void
+  seeing: SeeingConditions
+  viewAltitude: number
+  analysis: Pick<
+    PhysicalGlowAnalysisState,
+    'status' | 'progress' | 'stage' | 'detail' | 'error' | 'result'
+  >
   onChange: (atmosphere: Atmosphere) => void
+  onSeeingChange: (seeing: SeeingConditions) => void
 }
-
-const APPEARANCE_MODES: ReadonlyArray<{
-  mode: AppearanceMode
-  label: string
-  description: string
-}> = [
-  { mode: 'realistic', label: 'Realistic', description: 'Natural rendering of the physical sky' },
-  { mode: 'atlas', label: 'Atlas', description: 'Same sky with amplified contrast' },
-]
 
 export default function SettingsPanel({
   atmosphere,
+  seeing,
+  viewAltitude,
   analysis,
-  appearanceMode,
-  onAppearanceModeChange,
   onChange,
+  onSeeingChange,
 }: SettingsPanelProps) {
   const [weatherView, setWeatherView] = useState<'presets' | 'custom'>('presets')
   const presetsTabRef = useRef<HTMLButtonElement>(null)
   const customTabRef = useRef<HTMLButtonElement>(null)
   const activePreset = findWeatherPreset(atmosphere)
   const analysisProgress = Math.round(Math.min(100, Math.max(0, analysis.progress)))
+  const hasAnalysisResult = analysis.result !== undefined
+  const analysisStatus = getAnalysisStatusLabel(analysis.status, hasAnalysisResult)
   const set = (key: keyof Atmosphere, value: number) => onChange({ ...atmosphere, [key]: value })
+  const setSeeing = (key: keyof SeeingConditions, value: number) => (
+    onSeeingChange({ ...seeing, [key]: value })
+  )
   const onWeatherTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     let nextView: 'presets' | 'custom'
     if (event.key === 'Home') nextView = 'presets'
@@ -48,27 +50,6 @@ export default function SettingsPanel({
   }
   return (
     <>
-      <fieldset className="appearance-control">
-        <legend>Sky appearance</legend>
-        <div className="appearance-options">
-          {APPEARANCE_MODES.map(({ mode, label, description }) => (
-            <label className="appearance-option" key={mode}>
-              <input
-                type="radio"
-                name="sky-appearance"
-                value={mode}
-                checked={appearanceMode === mode}
-                onChange={() => onAppearanceModeChange(mode)}
-              />
-              <span>
-                <strong>{label}</strong>
-                <small>{description}</small>
-              </span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
       <section className="weather-control" aria-labelledby="weather-heading">
         <div className="weather-heading" id="weather-heading">
           <span>Weather model</span>
@@ -76,7 +57,9 @@ export default function SettingsPanel({
         </div>
         <div className={`weather-analysis ${analysis.status}`}>
           <div className="weather-analysis-label">
-            <span role="status" aria-live="polite" aria-atomic="true">{analysis.stage}</span>
+            <span role="status" aria-live="polite" aria-atomic="true">
+              {analysisStatus}
+            </span>
             <strong>{analysisProgress}%</strong>
           </div>
           <div
@@ -90,6 +73,9 @@ export default function SettingsPanel({
           >
             <span style={{ width: `${analysisProgress}%` }} />
           </div>
+          {analysis.status === 'loading' && <p className="weather-analysis-stage">{analysis.stage}</p>}
+          {analysis.detail && <p className="analysis-progress-detail">{analysis.detail}</p>}
+          {analysis.error && <p className="analysis-message" role="alert">{analysis.error}</p>}
         </div>
         <div className="weather-tabs" role="tablist" aria-label="Weather controls">
           <button
@@ -139,10 +125,12 @@ export default function SettingsPanel({
                 aria-labelledby={nameId}
                 aria-describedby={summaryId}
                 aria-pressed={active}
+                data-tooltip={preset.summary}
+                title={preset.summary}
                 onClick={() => onChange({ ...preset.values })}
               >
                 <strong id={nameId}>{preset.name}</strong>
-                <span id={summaryId}>{preset.summary}</span>
+                <span className="sr-only" id={summaryId}>{preset.summary}</span>
               </button>
             )
           })}
@@ -195,6 +183,28 @@ export default function SettingsPanel({
                 max={10}
                 step={0.1}
                 onChange={(value) => set('cloudBase', value)}
+              />
+
+              <div className="settings-section"><span>Optical seeing</span><i /></div>
+              <Slider
+                icon={<Focus size={15} />}
+                label="Zenith seeing FWHM"
+                value={seeing.zenithFwhmArcsec}
+                display={`${seeing.zenithFwhmArcsec.toFixed(2)}″`}
+                min={0.3}
+                max={4}
+                step={0.05}
+                onChange={(value) => setSeeing('zenithFwhmArcsec', value)}
+              />
+              <Slider
+                icon={<Wind size={15} />}
+                label="Effective upper wind"
+                value={seeing.effectiveWindMps}
+                display={`${Math.round(seeing.effectiveWindMps)} m/s`}
+                min={1}
+                max={60}
+                step={1}
+                onChange={(value) => setSeeing('effectiveWindMps', value)}
               />
 
               <div className="settings-section"><span>Particle optics</span><i /></div>
@@ -284,14 +294,29 @@ export default function SettingsPanel({
               />
             </div>
 
-            <div className="model-note">
-              <Sparkles size={15} />
-              <span>AOD is the dry/reference-humidity baseline. Humidity applies hygroscopic growth; clouds can brighten local light while extinguishing direct celestial light. The remaining bounded scatter tail is closed analytically.</span>
-            </div>
+            <details className="model-note">
+              <summary><Sparkles size={15} /> How the weather model works</summary>
+              <p>AOD is the dry/reference-humidity baseline. Humidity applies hygroscopic growth; clouds can brighten local light while extinguishing direct celestial light. The remaining bounded scatter tail is closed analytically.</p>
+            </details>
         </div>
+        <PsfPreview seeing={seeing} altitudeDeg={viewAltitude} />
       </section>
     </>
   )
+}
+
+function getAnalysisStatusLabel(
+  status: PhysicalGlowAnalysisState['status'],
+  hasResult: boolean,
+) {
+  if (status === 'loading') return hasResult
+    ? 'Updating — showing previous field'
+    : 'Building sky model'
+  if (status === 'live') return 'Physical field current'
+  if (status === 'error') return hasResult
+    ? 'Update failed — showing last valid field'
+    : 'Physical analysis unavailable'
+  return hasResult ? 'Previous physical field available' : 'Waiting for sky model'
 }
 
 type SliderProps = {
@@ -317,6 +342,7 @@ function Slider({ icon, label, value, display, min, max, step, onChange }: Slide
         max={max}
         step={step}
         value={value}
+        aria-valuetext={display}
         onChange={(event) => onChange(Number(event.target.value))}
         style={{ '--range-progress': `${((value - min) / (max - min)) * 100}%` } as React.CSSProperties}
       />

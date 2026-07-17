@@ -275,40 +275,83 @@ The renderer bilinearly interpolates the periodic bearing grid and irregular ele
 
 The glow itself is a 720-bearing vertex-colour mesh on the sky dome. The 22 physically solved elevations are linearly densified to 128 render rows, retaining every solved row while limiting render-only steps to 0.25° below 10°, 0.5° through 30°, 1° through 60°, and 2° toward the zenith. This suppresses triangle seams without pretending that interpolation is a new physical solve. A monotonic exposure mapping converts relative radiance to display intensity without replacing the underlying field used for visibility decisions.
 
-### 6.1 Atlas and Realistic presentation
+### 6.1 Continuous Realistic to Enhanced presentation
 
-The solver field and every visibility decision are independent of the selected presentation. Both modes therefore show the same physical star and object set, the same visible-star count and summary values, and the same directional glow field. **Atlas** uses enhanced object colours, broad stellar sprites, and high-exposure glow so the modeled effects are easy to inspect. **Realistic** is the default human-view approximation. Changing between them rebuilds only GPU geometry/materials and never starts a worker request.
-
-Realistic mode combines natural sky, astronomical twilight, moonlight, and artificial radiance before applying one relative eye/display response. With total luminance (Y) and the natural reference (Y_0=0.0020016), the linear SDR target is
+Presentation is one normalized scalar
 
 \[
-Y_{\rm display}=\min\left[0.03,\;0.0015\left(\frac{Y}{Y_0}\right)^{0.42}\right].
+e=\operatorname{clamp}(e_{\rm input},0,1),
 \]
 
-The 0.42 exponent represents dark-to-mesopic adaptation on an uncalibrated monitor; it is not an absolute display calibration. Astronomical twilight begins at a solar altitude of (-18^\circ). Its global reference term is (180tY_0), where (t=\operatorname{clamp}[(h_\odot+18)/18,0,1]). The lunar term is (8MY_0), where (M) is illuminated fraction multiplied by the positive sine of lunar altitude. The physical mesh adds the exact display-domain difference
+where non-finite or malformed input falls back to zero. **Realistic** is the default endpoint at \(e=0\); **Enhanced** is the inspection-oriented endpoint at \(e=1\); values between them interpolate continuously. The endpoint profile anchors are:
+
+| Presentation value | Stellar display gain | Milky Way opacity | Deep-sky opacity | Planet opacity |
+|---:|---:|---:|---:|---:|
+| Realistic, \(e=0\) | 1.60 | 0.045 | 0.16 | 0.62 |
+| Enhanced, \(e=1\) | 1.00 | 0.24 | 1.00 | 1.00 |
+
+Every intermediate profile value is a finite linear interpolation between these anchors. Star colour, signal, CSS-pixel size, core width, halo width, halo strength, and dispersion likewise interpolate between separately computed endpoint visuals.
+
+The separation from physics is strict, not approximate. The worker request and returned spectral/RGB field, directional and summary limiting magnitudes, SQM/Bortle and other metrics, solver timings and progress, cloud extinction, apparent object magnitudes, physical visibility fades, eligibility thresholds, eligible object set, and visible-star count are invariant for all \(e\). Presentation is not allowed to make an otherwise ineligible star, Milky Way sample, deep-sky object, or planet eligible. It only changes the rendering of objects already admitted by the shared physical calculation.
+
+The renderer architecture keeps the Realistic and Enhanced endpoint attributes, textures, geometry, and materials stable on the GPU. Slider movement is intended to update interpolation uniforms only: it must not start a worker request, recompute metrics or eligibility, rebuild endpoint geometry/materials, or recreate the canvas. Physical-input, time, location, and camera changes may still update the resources they genuinely affect. In particular, each star stores one shared apparent magnitude and visibility fade alongside both visual endpoints. Realistic atmospheric dispersion remains angular in arcseconds and is converted with the live camera's CSS-pixels-per-arcsecond scale; Enhanced dispersion is already in CSS pixels. Those two values are converted to the same unit before interpolation.
+
+The persistent setting is `night-glow:sky-enhancement`. On first load, the legacy binary `night-glow:appearance-mode` value migrates as `realistic` → 0 and `atlas` → 1, after which the legacy key is removed. Missing or malformed values resolve to Realistic. “Atlas” therefore survives only as a migration alias for the Enhanced endpoint, not as a current binary mode.
+
+The Realistic endpoint combines natural sky, astronomical twilight, moonlight, and artificial radiance before applying one relative eye/display response. With total luminance \(Y\) and natural reference \(Y_0=0.0020016\), the linear SDR target is
+
+\[
+Y_{\rm display}=\min\left[0.55,\;0.006\left(\frac{Y}{Y_0}\right)^{0.22}\right].
+\]
+
+The exponent is a relative dark-to-mesopic presentation curve for an uncalibrated monitor, not an absolute display calibration. Astronomical twilight begins continuously at solar altitude \(-18^\circ\) and follows anchored clear-sky zenith ratios through daylight. A high mean full Moon contributes approximately \(30Y_0\) at zenith after phase, distance, altitude, and clear-air transmission. Both sources brighten toward the horizon. The physical mesh adds the exact display-domain difference
 
 \[
 T(Y_{\rm base}+Y_{\rm artificial})-T(Y_{\rm base}),
 \]
 
-so pollution is not tone-mapped once in the mesh and counted again in the procedural dome. The eight spectral bands are projected through sampled CIE 1931 colour-matching functions for hue, gamut-limited, and rescaled to the worker luminance so Atlas metrics and Realistic presentation share the same relative-radiance calibration. Low-light colour is then strongly desaturated; the mesopic weight is evaluated after converting the natural-sky ratio to an approximate cd/m² scale.
+so pollution is not tone-mapped once in the mesh and counted again in the procedural dome. The eight spectral bands are projected through sampled CIE 1931 colour-matching functions for hue, gamut-limited, and rescaled to the worker luminance, preserving the same relative-radiance calibration used by physical metrics. Low-light colour is then strongly desaturated.
 
-Realistic stellar signal follows the magnitude law directly:
+The Realistic stellar endpoint follows the magnitude law directly:
 
 \[
-F_\star=0.35\,10^{-0.4m_{\rm apparent}}V,
+F_{\rm realistic}=0.35\,10^{-0.4m_{\rm apparent}}.
 \]
 
-where (V) is a smooth half-magnitude detection fade. The Gaussian core plus atmospheric halo is integral-normalized, so broader seeing redistributes this signal without creating energy. Consequently a magnitude-zero star carries exactly 100 times the integrated signal of a magnitude-five star before clipping. The sampled core FWHM is approximately 0.9–1.3 CSS pixels. Atmospheric dispersion is calculated in arcseconds from (1.2\cot(h)), converted using the live canvas height and vertical field of view, and capped at 0.35 pixel. Stellar colour keeps spectral ordering but its chroma falls from at most about 0.34 for the very brightest objects to 0.04 by magnitude three.
+Every catalogue star uses a unit-integral Gaussian atmospheric PSF. Given the simulated zenith seeing s, relative air mass X, and channel wavelength λ, its long-exposure FWHM is
 
-The shared fade (V) depends only on apparent magnitude and the physical directional limit. It is evaluated identically for Atlas and Realistic, so changing presentation cannot add or remove a star. Realistic applies a bounded display-only gain after the physical PSF signal has been assembled:
+\[
+\epsilon(s,X,\lambda)=sX^{0.6}\left(\frac{\lambda}{500\,{\rm nm}}\right)^{-0.2},
+\qquad \sigma=\frac{\epsilon}{2.35482}.
+\]
+
+The renderer evaluates the red, green, and blue Gaussians independently in angular units after converting arcseconds through the live camera field of view. The physical angular width is convolved in quadrature with a 0.42 CSS-pixel sampling footprint, so a subpixel star remains antialiased at naked-eye fields while the true seeing profile becomes resolved under deep zoom. Point quads extend to five sigma and discard their transparent tails; no opaque square sprite boundary remains. Broader seeing lowers the peak but does not create or remove integrated stellar flux. Consequently a magnitude-zero star still carries exactly 100 times the integrated pre-presentation signal of a magnitude-five star under the same extinction.
+
+At 500 nm the preview also reports Fried's parameter r₀ = 0.98λ/ε and the frozen-flow coherence time τ₀ = 0.31r₀/V̄, where V̄ is the effective turbulence-weighted upper wind. Wind changes the temporal coherence, not the long-exposure FWHM by itself. Humidity, aerosols, and clouds remain in the independently calculated extinction, reddening, and scattered-light terms because ordinary weather values do not uniquely determine the integrated Cₙ² turbulence profile.
+
+The shared physical fade
+
+\[
+V=\operatorname{clamp}\left(\frac{m_{\rm lim}-m_{\rm apparent}+0.32}{0.68},0,1\right)
+\]
+
+is applied after endpoint interpolation and is independent of \(e\). Atmospheric dispersion is \(1.2\cot(h)\) arcseconds and is converted with the same live angular camera scale. Stellar colour keeps spectral ordering while remaining subdued. A bounded display-only shoulder then improves small-point legibility:
 
 \[
 S_{\rm display}=S_{\rm linear}\,
 \frac{1.6}{1+0.6S_{\rm linear}}.
 \]
 
-The gain approaches 1.6 for faint signals and rolls smoothly back to one at a unit signal. The lifted linear-light signal then receives the same linear-to-sRGB display transfer as the sky and Milky Way. This makes faint but physically visible stars legible without hard clipping bright ones. It does not alter catalogue membership, the integrated 100:1 magnitude-zero-to-five signal ratio before presentation, limiting magnitude, visible-star count, or atmospheric transport. Atlas applies its stronger size, colour, halo, and glow mappings to those same physical inputs.
+The gain approaches 1.6 for faint signals and rolls smoothly back to one at a unit signal before the linear-to-sRGB transfer. It does not change visibility or eligibility.
+
+The Enhanced endpoint uses a monotonic compressed stellar mapping
+
+\[
+F_{\rm enhanced}=\operatorname{clamp}\!\left(10^{-0.08m_{\rm apparent}},0.22,1.6\right)
+\operatorname{clamp}\!\left(1.08-0.025m_{\rm apparent},0.68,1\right).
+\]
+
+Brighter stars therefore remain brighter, but a five-magnitude contrast is compressed from 100:1 at the Realistic physical endpoint to roughly 2.6:1 at Enhanced under equal extinction. Faint stars receive the larger relative lift. Linear interpolation between endpoint signals makes that bright/faint ratio contract monotonically as \(e\) increases while keeping it strictly above one; the same progression broadens sprites and halos and increases visible chroma without changing the eligible set.
 
 ## 7. Worker, caches, and real progress
 
@@ -361,7 +404,7 @@ Preset kernels remove the dominant initial path-integration cost; the FFT plan a
 
 `npm run test:e2e` launches Chromium, observes intermediate real worker percentages, verifies that the worker returned all 22 adaptive elevations, confirms the four physical components reach 100%, confirms neither zoom nor idle time triggers a second solve, changes to the Humid atmosphere preset, verifies that requested recomputation, and fails on page or console errors.
 
-`npm run test:appearance` checks the Realistic sky-response anchors, bounded 1.6× stellar display lift, shared Atlas/Realistic visibility support, magnitude law, integral-normalized PSF, stellar chroma, sprite size, and atmosphere-dependent dispersion. The appearance E2E case verifies accessible keyboard selection and persistence, requires the complete summary and solver result to remain identical across modes, and confirms that the canvas presentation still changes.
+`npm run test:appearance` checks enhancement normalization and clamping, exact Realistic/Enhanced profile anchors, finite endpoint interpolation at 0/0.25/0.5/0.75/1, shared physical visibility and eligibility, Enhanced faint-star lift and monotonic dynamic-range compression, preserved brightness ordering, integral-normalized Realistic PSFs, colour and halo progression, camera-aware arcsecond-to-CSS-pixel dispersion conversion before interpolation, Realistic sky/moon/twilight response, and direct-cloud/extinction invariants. The appearance E2E case verifies the continuous accessible slider, persistence and legacy migration, requires solver requests, timings, progress, metrics, summary, eligibility, and canvas creation to remain invariant, and confirms that intermediate and endpoint frames still differ.
 
 `npm run test:weather` validates all twelve fields and UI bounds for every preset, rebuilds all eight full shipped kernels and requires bit-for-bit parity with their binary assets, keeps numerical solver order fixed, and checks the exact direct-cloud transmission law. `npm run test:weather:regional` runs all eight full-resolution Warsaw fields with one bounded FFT plan at a time; it locks Typical clear to its anchor and polluted low/snow overcast to the measured 6–10× range. The browser companion confirms that Presets is the primary view, Custom is secondary and keyboard-operable, a preset change produces observable visible progress, daylight is not labeled Bortle, and moonless Warsaw moves from approximately 17.44 SQM / +5.0 / 402 stars when clear to about 15.3 SQM / +0.0 / zero stars under low overcast. A separate worker regression cancels both inline and cache-hit source analyses and proves that neither path can desynchronize the main-thread and worker LRU order.
 

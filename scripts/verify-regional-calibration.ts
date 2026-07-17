@@ -12,7 +12,7 @@ import {
   createRingConvolutionPlan,
   createRingEmissionField,
 } from '../src/lib/physics'
-import { NATURAL_SKY_LUMINANCE } from '../src/lib/appearance'
+import { NATURAL_SKY_LUMINANCE } from '../src/lib/photometry'
 import {
   PRECOMPUTED_WEATHER_KERNEL_BANDS,
   PRECOMPUTED_WEATHER_KERNEL_GRID,

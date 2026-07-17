@@ -19,6 +19,11 @@ test('exposes preset-first controls and credible Warsaw clear/overcast output', 
     'Physical sky field ready',
     { timeout: 45_000 },
   )
+  const summary = page.getByLabel('Sky visibility summary')
+  await expect(summary).toBeVisible()
+  await expect(summary).toHaveAttribute('data-analysis-state', 'live')
+  await expect(summary).toContainText('Typical clear')
+  await expect(summary.locator('.summary-metric').filter({ hasText: 'Sky quality' })).toContainText('mag/arcsec²')
   const observationTime = page.getByLabel('Observation date and time')
   const skyClassMetric = page.getByLabel('Sky visibility summary').locator('.summary-metric').first()
   await observationTime.fill('2026-07-14T12:00')
@@ -59,7 +64,7 @@ test('exposes preset-first controls and credible Warsaw clear/overcast output', 
   await expect(presetsPanel).toBeHidden()
   await expect(customPanel).toBeVisible()
   await expect(page.locator('.sliders')).toBeVisible()
-  await expect(page.getByRole('slider')).toHaveCount(12)
+  await expect(customPanel.getByRole('slider')).toHaveCount(14)
 
   await page.keyboard.press('Home')
   await expect(presetsTab).toBeFocused()
@@ -75,6 +80,9 @@ test('exposes preset-first controls and credible Warsaw clear/overcast output', 
   await expect(presetButton(page, defaultPreset)).toHaveAttribute('aria-pressed', 'true')
 
   await selectPresetAndVerifyProgress(page, lowOvercastPreset)
+  await expect(summary).toContainText('Low overcast')
+  await expect(summary).toHaveAttribute('data-analysis-state', 'live')
+  await expect(summary).toHaveAttribute('aria-busy', 'false')
   const overcast = await readSkyOutput(page)
   console.log('Warsaw moonless weather fixture', { clear, overcast })
 

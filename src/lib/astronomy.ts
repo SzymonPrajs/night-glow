@@ -1,5 +1,6 @@
-import { Body, Equator, Horizon, Illumination, Observer } from 'astronomy-engine'
+import { Body, Equator, Horizon, Illumination, MoonPhase, Observer } from 'astronomy-engine'
 import type { Location } from '../types'
+import { angularDiameterDegrees } from './celestialLight'
 
 export type HorizontalObject = {
   name: string
@@ -8,9 +9,17 @@ export type HorizontalObject = {
   magnitude: number
   kind: 'planet' | 'moon' | 'sun'
   phase?: number
+  phaseAngle?: number
+  waxing?: boolean
+  distanceAu?: number
+  angularDiameter?: number
 }
 
 const PLANETS = [Body.Mercury, Body.Venus, Body.Mars, Body.Jupiter, Body.Saturn, Body.Uranus, Body.Neptune]
+const BODY_RADIUS_KM: Partial<Record<string, number>> = {
+  [Body.Sun]: 695_700,
+  [Body.Moon]: 1_737.4,
+}
 
 export function getSolarSystem(date: Date, location: Location): HorizontalObject[] {
   const observer = new Observer(location.lat, location.lon, 0)
@@ -19,13 +28,18 @@ export function getSolarSystem(date: Date, location: Location): HorizontalObject
     const equatorial = Equator(body, date, observer, true, true)
     const horizontal = Horizon(date, observer, equatorial.ra, equatorial.dec, 'normal')
     const illumination = Illumination(body, date)
+    const radiusKm = BODY_RADIUS_KM[body]
     return {
       name: body,
       azimuth: horizontal.azimuth,
       altitude: horizontal.altitude,
-      magnitude: body === Body.Sun ? -26.74 : body === Body.Moon ? illumination.mag : illumination.mag,
+      magnitude: illumination.mag,
       kind: body === Body.Sun ? 'sun' : body === Body.Moon ? 'moon' : 'planet',
       phase: illumination.phase_fraction,
+      phaseAngle: illumination.phase_angle,
+      waxing: body === Body.Moon ? MoonPhase(date) < 180 : undefined,
+      distanceAu: equatorial.dist,
+      angularDiameter: radiusKm ? angularDiameterDegrees(radiusKm, equatorial.dist) : undefined,
     }
   })
 }

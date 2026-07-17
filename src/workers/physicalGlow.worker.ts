@@ -9,6 +9,7 @@ import type {
   PhysicalGlowWorkerMessage,
   PhysicalGlowWorkerRequest,
 } from '../lib/physicalGlowProtocol'
+import { NATURAL_SKY_RGB } from '../lib/photometry'
 import {
   atmosphericKernelCacheKey,
   buildAtmosphericKernelAsync,
@@ -549,7 +550,7 @@ function calculateComponentContributions(
 }
 
 function calculateDirectionalLimits(rgb: Float32Array, request: PhysicalGlowAnalyzeRequest) {
-  const natural = request.options?.naturalSkyRadianceRgb ?? [0.0016, 0.002, 0.0032]
+  const natural = request.options?.naturalSkyRadianceRgb ?? NATURAL_SKY_RGB
   const naturalLuminance = Math.max(1e-9, luminance(natural[0], natural[1], natural[2]))
   const darkLimit = request.options?.darkSkyLimitingMagnitude ?? 7.15
   const slope = request.options?.limitingMagnitudeSlope ?? 1.18

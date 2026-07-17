@@ -11,6 +11,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test:appearance": "tsx scripts/verify-realistic-appearance.ts",
+    "test:celestial": "tsx scripts/verify-celestial-light.ts",
+    "test:seeing": "tsx scripts/verify-seeing-psf.ts",
     "test:calibration": "tsx scripts/verify-regional-calibration.ts",
     "test:physics": "tsx scripts/verify-physical-model.ts",
     "test:weather": "tsx scripts/verify-weather-presets.ts",

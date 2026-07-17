@@ -4,8 +4,6 @@ export type Location = {
   label: string
 }
 
-export type AppearanceMode = 'realistic' | 'atlas'
-
 export type Atmosphere = {
   /** Aerosol optical depth at 550 nm. */
   aerosol: number
@@ -23,6 +21,13 @@ export type Atmosphere = {
   cloudOpticalDepth: number
   groundAlbedo: number
   maxScatteringOrder: number
+}
+
+export type SeeingConditions = {
+  /** Long-exposure atmospheric FWHM at zenith and 500 nm, in arcseconds. */
+  zenithFwhmArcsec: number
+  /** Cn2-weighted wind speed used for the frozen-flow coherence time. */
+  effectiveWindMps: number
 }
 
 export type LightSource = {

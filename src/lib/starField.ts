@@ -6,10 +6,14 @@ export const MILKY_WAY_POINTS = makeMilkyWay(4200)
 
 export function createLabelTexture(text: string, accent = '#dbeaff') {
   const canvas = document.createElement('canvas')
+  const logicalWidth = 512
+  const logicalHeight = 96
+  const rasterScale = 2
+  canvas.width = logicalWidth * rasterScale
+  canvas.height = logicalHeight * rasterScale
   const context = canvas.getContext('2d')!
-  canvas.width = 512
-  canvas.height = 96
-  context.font = '500 28px Inter, system-ui, sans-serif'
+  context.scale(rasterScale, rasterScale)
+  context.font = '500 28px "Manrope", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
   context.textBaseline = 'middle'
   const width = Math.min(470, context.measureText(text).width + 42)
   context.fillStyle = 'rgba(3, 8, 18, .72)'
@@ -30,42 +34,45 @@ export function createLabelTexture(text: string, accent = '#dbeaff') {
 
 export function createOrbTexture(color: string, halo: string) {
   const canvas = document.createElement('canvas')
-  canvas.width = 128
-  canvas.height = 128
+  canvas.width = 256
+  canvas.height = 256
   const context = canvas.getContext('2d')!
-  const gradient = context.createRadialGradient(64, 64, 2, 64, 64, 62)
+  const gradient = context.createRadialGradient(128, 128, 4, 128, 128, 124)
   gradient.addColorStop(0, '#ffffff')
   gradient.addColorStop(0.13, color)
   gradient.addColorStop(0.28, halo)
   gradient.addColorStop(1, 'rgba(255,255,255,0)')
   context.fillStyle = gradient
-  context.fillRect(0, 0, 128, 128)
+  context.fillRect(0, 0, 256, 256)
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
   return texture
 }
 
-/** A simple naked-eye lunar disc with an illuminated terminator. */
-export function createMoonTexture(phase: number) {
+/** A naked-eye lunar disc whose luminous area exactly matches the illuminated fraction. */
+export function createMoonTexture(phase: number, waxing = true) {
   const canvas = document.createElement('canvas')
-  canvas.width = 128
-  canvas.height = 128
+  const textureSize = 256
+  const center = textureSize / 2
+  const discRadius = 123
+  canvas.width = textureSize
+  canvas.height = textureSize
   const context = canvas.getContext('2d')!
-  const image = context.createImageData(128, 128)
+  const image = context.createImageData(textureSize, textureSize)
   const illuminated = Math.max(0, Math.min(1, phase))
   const terminator = 2 * illuminated - 1
 
-  for (let y = 0; y < 128; y += 1) {
-    for (let x = 0; x < 128; x += 1) {
-      const nx = (x + 0.5 - 64) / 49
-      const ny = (y + 0.5 - 64) / 49
+  for (let y = 0; y < textureSize; y += 1) {
+    for (let x = 0; x < textureSize; x += 1) {
+      const nx = (x + 0.5 - center) / discRadius
+      const ny = (y + 0.5 - center) / discRadius
       const radiusSquared = nx * nx + ny * ny
       if (radiusSquared > 1) continue
       const limb = Math.sqrt(Math.max(0, 1 - ny * ny))
-      const lit = nx >= -terminator * limb
+      const lit = waxing ? nx >= -terminator * limb : nx <= terminator * limb
       if (!lit) continue
       const limbDarkening = 0.72 + 0.28 * Math.sqrt(Math.max(0, 1 - radiusSquared))
-      const offset = (y * 128 + x) * 4
+      const offset = (y * textureSize + x) * 4
       image.data[offset] = Math.round(226 * limbDarkening)
       image.data[offset + 1] = Math.round(233 * limbDarkening)
       image.data[offset + 2] = Math.round(238 * limbDarkening)
@@ -74,6 +81,60 @@ export function createMoonTexture(phase: number) {
   }
 
   context.putImageData(image, 0, 0)
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
+  texture.minFilter = THREE.LinearFilter
+  texture.generateMipmaps = false
+  return texture
+}
+
+/** Solar photosphere with a compact limb-darkened edge and no baked-in halo. */
+export function createSunTexture() {
+  const canvas = document.createElement('canvas')
+  const size = 256
+  const center = size / 2
+  const radius = 123
+  canvas.width = size
+  canvas.height = size
+  const context = canvas.getContext('2d')!
+  const image = context.createImageData(size, size)
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const nx = (x + 0.5 - center) / radius
+      const ny = (y + 0.5 - center) / radius
+      const radiusSquared = nx * nx + ny * ny
+      if (radiusSquared > 1) continue
+      const mu = Math.sqrt(Math.max(0, 1 - radiusSquared))
+      const intensity = 0.48 + 0.52 * mu
+      const offset = (y * size + x) * 4
+      image.data[offset] = Math.round(255 * intensity)
+      image.data[offset + 1] = Math.round(249 * intensity)
+      image.data[offset + 2] = Math.round(220 * intensity)
+      image.data[offset + 3] = 255
+    }
+  }
+  context.putImageData(image, 0, 0)
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
+  texture.minFilter = THREE.LinearFilter
+  texture.generateMipmaps = false
+  return texture
+}
+
+/** Unit aureole texture; angular extent and energy are set independently by the renderer. */
+export function createGlowTexture() {
+  const canvas = document.createElement('canvas')
+  canvas.width = 256
+  canvas.height = 256
+  const context = canvas.getContext('2d')!
+  const gradient = context.createRadialGradient(128, 128, 0, 128, 128, 126)
+  gradient.addColorStop(0, 'rgba(255,255,255,.95)')
+  gradient.addColorStop(0.035, 'rgba(255,255,255,.62)')
+  gradient.addColorStop(0.18, 'rgba(255,255,255,.16)')
+  gradient.addColorStop(0.55, 'rgba(255,255,255,.025)')
+  gradient.addColorStop(1, 'rgba(255,255,255,0)')
+  context.fillStyle = gradient
+  context.fillRect(0, 0, 256, 256)
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
   texture.minFilter = THREE.LinearFilter

@@ -2,28 +2,30 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Clock3,
   CloudSun,
-  Layers3,
+  Compass,
   LocateFixed,
   Map,
   MapPin,
   Minus,
   MousePointer2,
-  Pin,
-  PinOff,
   Plus,
   RotateCcw,
   Settings2,
-  X,
 } from 'lucide-react'
 import LocationMap from './components/LocationMap'
+import PhysicalAnalysisPanel, { type AnalysisPresentation } from './components/PhysicalAnalysisPanel'
 import SettingsPanel from './components/SettingsPanel'
+import SideDrawer, { PanelHeader } from './components/SideDrawer'
 import SkyCanvas from './components/SkyCanvas'
+import SkyPresentationControl from './components/SkyPresentationControl'
+import SkyStatusBar from './components/SkyStatusBar'
 import { usePhysicalGlow, type PhysicalGlowAnalysisState } from './hooks/usePhysicalGlow'
 import { getSolarSystem } from './lib/astronomy'
+import { moonSkyStrength } from './lib/celestialLight'
 import { calculatePhysicalSkyMetrics } from './lib/physicalGlowField'
-import { clamp } from './lib/skyModel'
-import { DEFAULT_ATMOSPHERE } from './lib/weatherPresets'
-import type { AppearanceMode, Atmosphere, Location } from './types'
+import { DEFAULT_SEEING_CONDITIONS } from './lib/seeing'
+import { DEFAULT_ATMOSPHERE, findWeatherPreset } from './lib/weatherPresets'
+import type { Atmosphere, Location, SeeingConditions } from './types'
 
 const INITIAL_LOCATION: Location = {
   lat: 52.2297,
@@ -31,74 +33,120 @@ const INITIAL_LOCATION: Location = {
   label: 'Warsaw, Poland',
 }
 
-const APPEARANCE_STORAGE_KEY = 'night-glow:appearance-mode'
+const SKY_ENHANCEMENT_STORAGE_KEY = 'night-glow:sky-enhancement'
+const LEGACY_APPEARANCE_STORAGE_KEY = 'night-glow:appearance-mode'
+const MAP_PIN_STORAGE_KEY = 'night-glow:map-pinned'
+const SETTINGS_PIN_STORAGE_KEY = 'night-glow:settings-pinned'
+const COMPACT_QUERY = '(max-width: 1099px)'
 
-function storedAppearanceMode(): AppearanceMode {
-  const stored = localStorage.getItem(APPEARANCE_STORAGE_KEY)
-  return stored === 'atlas' || stored === 'realistic' ? stored : 'realistic'
+function storedSkyEnhancement() {
+  const stored = localStorage.getItem(SKY_ENHANCEMENT_STORAGE_KEY)
+  if (stored != null && stored.trim() !== '') {
+    const parsed = Number(stored)
+    return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : 0
+  }
+  const legacy = localStorage.getItem(LEGACY_APPEARANCE_STORAGE_KEY)
+  return legacy === 'atlas' ? 1 : 0
 }
 
 export default function App() {
   const [location, setLocation] = useState(INITIAL_LOCATION)
   const [atmosphere, setAtmosphere] = useState<Atmosphere>(() => ({ ...DEFAULT_ATMOSPHERE }))
-  const [appearanceMode, setAppearanceMode] = useState<AppearanceMode>(storedAppearanceMode)
+  const [seeing, setSeeing] = useState<SeeingConditions>(() => ({ ...DEFAULT_SEEING_CONDITIONS }))
+  const [skyEnhancement, setSkyEnhancement] = useState(storedSkyEnhancement)
   const [date, setDate] = useState(() => new Date())
   const [mapOpen, setMapOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [mapPinned, setMapPinned] = useState(() => localStorage.getItem('night-glow:map-pinned') === 'true')
-  const [settingsPinned, setSettingsPinned] = useState(() => localStorage.getItem('night-glow:settings-pinned') === 'true')
+  const [mapPinned, setMapPinned] = useState(() => localStorage.getItem(MAP_PIN_STORAGE_KEY) === 'true')
+  const [settingsPinned, setSettingsPinned] = useState(() => localStorage.getItem(SETTINGS_PIN_STORAGE_KEY) === 'true')
+  const [lastActiveDrawer, setLastActiveDrawer] = useState<'map' | 'settings'>('map')
   const [resetViewToken, setResetViewToken] = useState(0)
   const [view, setView] = useState({ azimuth: 180, altitude: 17, fov: 62 })
+  const compactLayout = useMediaQuery(COMPACT_QUERY)
   const physicalGlow = usePhysicalGlow(location, atmosphere)
 
   useEffect(() => {
-    localStorage.setItem('night-glow:map-pinned', String(mapPinned))
+    localStorage.setItem(MAP_PIN_STORAGE_KEY, String(mapPinned))
   }, [mapPinned])
 
   useEffect(() => {
-    localStorage.setItem('night-glow:settings-pinned', String(settingsPinned))
+    localStorage.setItem(SETTINGS_PIN_STORAGE_KEY, String(settingsPinned))
   }, [settingsPinned])
 
   useEffect(() => {
-    localStorage.setItem(APPEARANCE_STORAGE_KEY, appearanceMode)
-  }, [appearanceMode])
+    localStorage.setItem(SKY_ENHANCEMENT_STORAGE_KEY, String(skyEnhancement))
+    localStorage.removeItem(LEGACY_APPEARANCE_STORAGE_KEY)
+  }, [skyEnhancement])
+
+  useEffect(() => {
+    if (!compactLayout || !mapPinned || !settingsPinned) return
+    if (lastActiveDrawer === 'settings') {
+      setMapPinned(false)
+      setMapOpen(false)
+    } else {
+      setSettingsPinned(false)
+      setSettingsOpen(false)
+    }
+  }, [compactLayout, lastActiveDrawer, mapPinned, settingsPinned])
 
   const solarSystem = useMemo(() => getSolarSystem(date, location), [date, location])
   const sun = solarSystem.find((object) => object.kind === 'sun')
   const moon = solarSystem.find((object) => object.kind === 'moon')
-  const moonLight = moon && moon.altitude > 0
-    ? (moon.phase ?? 0) * Math.sin((clamp(moon.altitude, 0, 90) * Math.PI) / 180)
-    : 0
+  const moonLight = moonSkyStrength(moon, atmosphere)
   const metrics = useMemo(
     () => calculatePhysicalSkyMetrics(physicalGlow.result, date, location, atmosphere, sun?.altitude, moonLight),
     [physicalGlow.result, date, location, atmosphere, sun?.altitude, moonLight],
   )
   const skyState = solarSkyState(sun?.altitude)
-  const nudgeTime = (hours: number) => setDate((current) => new Date(current.getTime() + hours * 3_600_000))
+  const weatherName = findWeatherPreset(atmosphere)?.name ?? 'Custom'
+  const analysisPresentation = presentAnalysis(physicalGlow)
+  const timeZone = useMemo(() => deviceTimeZoneLabel(date), [date])
   const direction = compassDirection(view.azimuth)
-  const setMapPin = (pinned: boolean) => {
-    setMapPinned(pinned)
-    if (pinned) setMapOpen(true)
-    if (pinned && window.innerWidth <= 720) {
-      setSettingsPinned(false)
-      setSettingsOpen(false)
+  const mapExpanded = mapPinned || mapOpen
+
+  const nudgeTime = (hours: number) => setDate((current) => new Date(current.getTime() + hours * 3_600_000))
+  const setDrawerOpen = (drawer: 'map' | 'settings', open: boolean) => {
+    if (open) setLastActiveDrawer(drawer)
+    if (drawer === 'map') {
+      setMapOpen(open)
+      if (open && compactLayout) {
+        setSettingsOpen(false)
+        setSettingsPinned(false)
+      }
+    } else {
+      setSettingsOpen(open)
+      if (open && compactLayout) {
+        setMapOpen(false)
+        setMapPinned(false)
+      }
     }
   }
-  const setSettingsPin = (pinned: boolean) => {
-    setSettingsPinned(pinned)
-    if (pinned) setSettingsOpen(true)
-    if (pinned && window.innerWidth <= 720) {
-      setMapPinned(false)
-      setMapOpen(false)
+  const setDrawerPinned = (drawer: 'map' | 'settings', pinned: boolean) => {
+    setLastActiveDrawer(drawer)
+    if (drawer === 'map') {
+      setMapPinned(pinned)
+      if (pinned) setMapOpen(true)
+      if (pinned && compactLayout) {
+        setSettingsPinned(false)
+        setSettingsOpen(false)
+      }
+    } else {
+      setSettingsPinned(pinned)
+      if (pinned) setSettingsOpen(true)
+      if (pinned && compactLayout) {
+        setMapPinned(false)
+        setMapOpen(false)
+      }
     }
   }
 
   return (
-    <main className="app-shell" data-appearance={appearanceMode}>
+    <main className="app-shell" data-sky-enhancement={skyEnhancement.toFixed(2)} data-compact={compactLayout || undefined}>
       <SkyCanvas
         location={location}
         atmosphere={atmosphere}
-        appearanceMode={appearanceMode}
+        seeing={seeing}
+        skyEnhancement={skyEnhancement}
         moonLight={moonLight}
         glowField={physicalGlow.result}
         metrics={metrics}
@@ -109,126 +157,118 @@ export default function App() {
       />
 
       <div className="vignette" aria-hidden="true" />
-      <div className="zenith-marker" aria-hidden="true"><span /></div>
+      <div className="view-center-reticle" aria-hidden="true" />
 
       <header className="topbar">
         <div className="brand">
-          <div className="brand-mark"><span /><i /></div>
+          <div className="brand-mark" aria-hidden="true"><span /><i /></div>
           <div>
             <strong>Night Glow</strong>
             <span>Sky & light atlas</span>
           </div>
         </div>
-
-        <div className="sky-summary" aria-label="Sky visibility summary">
-          <SummaryMetric
-            label={skyState ? 'Sky state' : 'Bortle'}
-            value={skyState ?? `Class ${metrics.bortle}`}
-          />
-          <SummaryMetric label="Sky quality" value={`${metrics.zenithMag.toFixed(2)} mag`} />
-          <SummaryMetric label="Naked-eye limit" value={`+${metrics.limitingMagnitude.toFixed(1)}`} />
-          <SummaryMetric label="Visible stars" value={`~${metrics.visibleStars.toLocaleString()}`} />
-        </div>
-
-        <div aria-hidden="true" />
+        <SkyStatusBar
+          skyState={skyState}
+          metrics={metrics}
+          weatherName={weatherName}
+          presentation={analysisPresentation}
+        />
+        <SkyPresentationControl value={skyEnhancement} onChange={setSkyEnhancement} />
       </header>
 
       <SideDrawer
         side="left"
         label="Location map"
-        tabIcon={<Map size={18} />}
+        tabLabel="Location"
+        tabIcon={<Map size={19} />}
         panelClass="location-panel"
         panelLabel="Observer location and physical sky analysis"
         pinned={mapPinned}
         open={mapOpen}
-        onOpenChange={setMapOpen}
+        onOpenChange={(open) => setDrawerOpen('map', open)}
       >
-          <PanelHeader
-            icon={<MapPin size={17} />}
-            title="Observer location"
-            pinned={mapPinned}
-            onPinnedChange={setMapPin}
-            onClose={() => { setMapPinned(false); setMapOpen(false) }}
-          />
-          <LocationMap location={location} heading={view.azimuth} onChange={setLocation} />
+        <PanelHeader
+          icon={<MapPin size={18} />}
+          title="Observer location"
+          pinned={mapPinned}
+          onPinnedChange={(pinned) => setDrawerPinned('map', pinned)}
+          onClose={() => { setMapPinned(false); setMapOpen(false) }}
+        />
+        <LocationMap location={location} heading={view.azimuth} visible={mapExpanded} onChange={setLocation} />
+        <div className="location-readout">
+          <strong>{location.label}</strong>
           <div className="coordinates">
-            <LocateFixed size={14} />
-            <span>{location.lat.toFixed(4)}° {location.lat >= 0 ? 'N' : 'S'}</span>
+            <LocateFixed size={15} />
+            <span>{Math.abs(location.lat).toFixed(4)}° {location.lat >= 0 ? 'N' : 'S'}</span>
             <span>{Math.abs(location.lon).toFixed(4)}° {location.lon >= 0 ? 'E' : 'W'}</span>
           </div>
-          <div className="analysis-block">
-            <div className="analysis-title">
-              <span><Layers3 size={14} /> Physical sky analysis</span>
-              <DataStatus physicalGlow={physicalGlow} />
-            </div>
-            <SolverProgress physicalGlow={physicalGlow} />
-            <SolverTimings physicalGlow={physicalGlow} />
-            <div className="analysis-grid">
-              <div><strong>{physicalGlow.emissionDiagnostics?.rings.length ?? 81}</strong><span>distance rings</span></div>
-              <div><strong>{physicalGlow.result?.azimuthCount ?? 720}</strong><span>bearings</span></div>
-              <div><strong>{physicalGlow.result?.elevationDeg.length ?? 22}</strong><span>adaptive elevations</span></div>
-              <div><strong>{physicalGlow.result?.wavelengthsNm.length ?? 8}</strong><span>spectral bands</span></div>
-            </div>
-            <RadianceBreakdown physicalGlow={physicalGlow} />
-            {physicalGlow.error && <p className="analysis-message">{physicalGlow.error}</p>}
-          </div>
+        </div>
+        <PhysicalAnalysisPanel physicalGlow={physicalGlow} presentation={analysisPresentation} />
       </SideDrawer>
 
       <SideDrawer
         side="right"
         label="Sky settings"
-        tabIcon={<Settings2 size={18} />}
+        tabLabel="Settings"
+        tabIcon={<Settings2 size={19} />}
         panelClass="settings-panel"
-        panelLabel="Sky appearance and atmospheric scattering settings"
+        panelLabel="Atmospheric scattering and weather settings"
         pinned={settingsPinned}
         open={settingsOpen}
-        onOpenChange={setSettingsOpen}
+        onOpenChange={(open) => setDrawerOpen('settings', open)}
       >
-          <PanelHeader
-            icon={<CloudSun size={17} />}
-            title="Atmosphere"
-            pinned={settingsPinned}
-            onPinnedChange={setSettingsPin}
-            onClose={() => { setSettingsPinned(false); setSettingsOpen(false) }}
-          />
-          <SettingsPanel
-            atmosphere={atmosphere}
-            analysis={physicalGlow}
-            appearanceMode={appearanceMode}
-            onAppearanceModeChange={setAppearanceMode}
-            onChange={setAtmosphere}
-          />
+        <PanelHeader
+          icon={<CloudSun size={18} />}
+          title="Atmosphere"
+          pinned={settingsPinned}
+          onPinnedChange={(pinned) => setDrawerPinned('settings', pinned)}
+          onClose={() => { setSettingsPinned(false); setSettingsOpen(false) }}
+        />
+        <SettingsPanel
+          atmosphere={atmosphere}
+          seeing={seeing}
+          viewAltitude={view.altitude}
+          analysis={physicalGlow}
+          onChange={setAtmosphere}
+          onSeeingChange={setSeeing}
+        />
       </SideDrawer>
 
       <div className="view-readout" aria-label="Current view direction">
-        <div className="compass-disc"><span style={{ transform: `rotate(${-view.azimuth}deg)` }}>N</span></div>
-        <div><strong>{direction} {Math.round(view.azimuth)}°</strong><span>{Math.round(view.altitude)}° altitude · {Math.round(view.fov)}° field</span></div>
+        <div className="compass-disc"><Compass size={17} aria-hidden="true" /></div>
+        <div><strong>{direction} {Math.round(view.azimuth)}°</strong><span>{Math.round(view.altitude)}° altitude · {formatFieldOfView(view.fov)} field</span></div>
       </div>
 
-      <div className="interaction-hint">
-        <MousePointer2 size={14} /> Drag to look around <span /> Scroll to zoom
+      <div className="interaction-hint" aria-hidden="true">
+        <MousePointer2 size={15} />
+        <span className="fine-pointer-copy">Drag to look <i /> Scroll to zoom</span>
+        <span className="coarse-pointer-copy">Drag to look <i /> Pinch to zoom</span>
       </div>
 
       <div className="time-dock">
-        <button className="dock-button" onClick={() => nudgeTime(-1)} aria-label="One hour earlier"><Minus size={16} /><span>1h</span></button>
+        <button className="dock-button" type="button" onClick={() => nudgeTime(-1)} aria-label="One hour earlier"><Minus size={17} /><span>1h</span></button>
         <label className="date-control">
-          <Clock3 size={16} />
-          <input
-            type="datetime-local"
-            value={toLocalInput(date)}
-            onChange={(event) => {
-              const next = new Date(event.target.value)
-              if (!Number.isNaN(next.getTime())) setDate(next)
-            }}
-            aria-label="Observation date and time"
-          />
+          <Clock3 size={17} />
+          <span className="date-fields">
+            <input
+              type="datetime-local"
+              value={toLocalInput(date)}
+              onChange={(event) => {
+                const next = new Date(event.target.value)
+                if (!Number.isNaN(next.getTime())) setDate(next)
+              }}
+              aria-label="Observation date and time, device local"
+              aria-describedby="device-time-zone"
+            />
+            <small id="device-time-zone">Device time · {timeZone}</small>
+          </span>
         </label>
-        <button className="now-button" onClick={() => setDate(new Date())}>Now</button>
-        <button className="dock-button" onClick={() => nudgeTime(1)} aria-label="One hour later"><Plus size={16} /><span>1h</span></button>
+        <button className="now-button" type="button" onClick={() => setDate(new Date())}>Now</button>
+        <button className="dock-button" type="button" onClick={() => nudgeTime(1)} aria-label="One hour later"><Plus size={17} /><span>1h</span></button>
       </div>
 
-      <button className="reset-view" onClick={() => setResetViewToken((token) => token + 1)}>
-        <RotateCcw size={15} /> Reset view
+      <button className="reset-view" type="button" onClick={() => setResetViewToken((token) => token + 1)}>
+        <RotateCcw size={16} /> Reset view
       </button>
 
       <div className="sky-legend" aria-label="Sky object legend">
@@ -240,218 +280,59 @@ export default function App() {
   )
 }
 
-type SideDrawerProps = {
-  side: 'left' | 'right'
-  label: string
-  tabIcon: React.ReactNode
-  panelClass: string
-  panelLabel: string
-  pinned: boolean
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  children: React.ReactNode
+function presentAnalysis(physicalGlow: PhysicalGlowAnalysisState): AnalysisPresentation {
+  if (physicalGlow.status === 'loading' && physicalGlow.result) {
+    return { state: 'updating', label: 'Updating — showing previous field', shortLabel: 'Updating previous', tone: 'warning', busy: true }
+  }
+  if (physicalGlow.status === 'loading') {
+    return { state: 'loading', label: 'Building sky model', shortLabel: 'Building', tone: 'info', busy: true }
+  }
+  if (physicalGlow.status === 'live') {
+    return { state: 'live', label: 'Physical field current', shortLabel: 'Current', tone: 'success', busy: false }
+  }
+  if (physicalGlow.status === 'error' && physicalGlow.result) {
+    return { state: 'stale-error', label: 'Update failed — showing last valid field', shortLabel: 'Last valid field', tone: 'warning', busy: false }
+  }
+  if (physicalGlow.status === 'error') {
+    return { state: 'unavailable', label: 'Physical analysis unavailable', shortLabel: 'Unavailable', tone: 'error', busy: false }
+  }
+  return { state: 'initial', label: 'Waiting for sky model', shortLabel: 'Waiting', tone: 'neutral', busy: false }
 }
 
-function SideDrawer({ side, label, tabIcon, panelClass, panelLabel, pinned, open, onOpenChange, children }: SideDrawerProps) {
-  const expanded = pinned || open
-  return (
-    <section
-      className={`side-drawer ${side} ${expanded ? 'is-open' : ''} ${pinned ? 'is-pinned' : ''}`}
-      onMouseEnter={() => onOpenChange(true)}
-      onMouseLeave={(event) => {
-        const focused = event.currentTarget.ownerDocument.activeElement
-        if (!pinned && !event.currentTarget.contains(focused)) onOpenChange(false)
-      }}
-      onFocusCapture={() => onOpenChange(true)}
-      onBlurCapture={(event) => {
-        if (!pinned && !event.currentTarget.contains(event.relatedTarget as Node | null)) onOpenChange(false)
-      }}
-    >
-      <div className="drawer-hover-strip" aria-hidden="true" />
-      <button
-        className="drawer-tab"
-        onClick={() => onOpenChange(true)}
-        aria-label={`Show ${label}`}
-        aria-expanded={expanded}
-      >
-        {tabIcon}
-        <span>{label}</span>
-      </button>
-      <aside className={`glass-panel drawer-panel ${panelClass}`} aria-label={panelLabel} aria-hidden={!expanded}>
-        {children}
-      </aside>
-    </section>
-  )
-}
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(() => window.matchMedia(query).matches)
 
-function PanelHeader({ icon, title, pinned, onPinnedChange, onClose }: {
-  icon: React.ReactNode
-  title: string
-  pinned: boolean
-  onPinnedChange: (pinned: boolean) => void
-  onClose: () => void
-}) {
-  return (
-    <div className="panel-header">
-      <div className="panel-title">{icon}<strong>{title}</strong></div>
-      <div className="panel-actions">
-        <button
-          className={pinned ? 'pin-button active' : 'pin-button'}
-          onClick={() => onPinnedChange(!pinned)}
-          aria-label={pinned ? `Unpin ${title}` : `Pin ${title} open`}
-          aria-pressed={pinned}
-        >
-          {pinned ? <PinOff size={15} /> : <Pin size={15} />}
-        </button>
-        <button onClick={onClose} aria-label={`Close ${title}`}><X size={15} /></button>
-      </div>
-    </div>
-  )
-}
+  useEffect(() => {
+    const media = window.matchMedia(query)
+    const update = () => setMatches(media.matches)
+    update()
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [query])
 
-function SummaryMetric({ label, value }: { label: string; value: string }) {
-  return <div className="summary-metric"><span>{label}</span><strong>{value}</strong></div>
-}
-
-function DataStatus({ physicalGlow }: { physicalGlow: PhysicalGlowAnalysisState }) {
-  if (physicalGlow.status === 'loading') return <span className="data-status loading"><i /> solving</span>
-  if (physicalGlow.status === 'live') return <span className="data-status live"><i /> physical</span>
-  if (physicalGlow.status === 'error') return <span className="data-status fallback"><i /> previous field</span>
-  return <span className="data-status"><i /> waiting</span>
-}
-
-function SolverProgress({ physicalGlow }: { physicalGlow: PhysicalGlowAnalysisState }) {
-  const progress = Math.round(clamp(physicalGlow.progress, 0, 100))
-  const rows = [
-    { label: 'Source grid', value: physicalGlow.components.emission * 100 },
-    { label: 'Atmosphere kernel', value: physicalGlow.components.kernel * 100 },
-    { label: 'Sky convolution', value: physicalGlow.components.propagation * 100 },
-    { label: 'Numerical checks', value: physicalGlow.components.diagnostics * 100 },
-  ]
-  return (
-    <div className={`analysis-progress ${physicalGlow.status}`}>
-      <div className="analysis-progress-label">
-        <span>{physicalGlow.stage}</span>
-        <strong>{progress}%</strong>
-      </div>
-      <div
-        className="analysis-progress-track"
-        role="progressbar"
-        aria-label="Physical sky analysis progress"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={progress}
-        aria-valuetext={physicalGlow.stage}
-      >
-        <span style={{ width: `${progress}%` }} />
-      </div>
-      <div className="analysis-progress-components" aria-label="Analysis component progress">
-        {rows.map((row) => (
-          <div key={row.label} className={row.value >= 99.5 ? 'complete' : row.value > 0 ? 'active' : ''}>
-            <span>{row.label}</span>
-            <i><b style={{ width: `${clamp(row.value, 0, 100)}%` }} /></i>
-            <strong>{Math.round(row.value)}%</strong>
-          </div>
-        ))}
-      </div>
-      {physicalGlow.detail && <p className="analysis-progress-detail">{physicalGlow.detail}</p>}
-    </div>
-  )
-}
-
-function SolverTimings({ physicalGlow }: { physicalGlow: PhysicalGlowAnalysisState }) {
-  const timings = physicalGlow.result?.timings
-  if (!timings) return null
-  const entries = [
-    ['grid', physicalGlow.emissionBuildMs ?? 0],
-    ['kernel', timings.kernelMs],
-    ['sky', timings.propagationMs],
-    ['checks', timings.diagnosticsMs],
-  ] as const
-  return (
-    <div className="solver-timings" aria-label="Solver timing breakdown">
-      {entries.map(([label, milliseconds]) => (
-        <span key={label}><i>{label}</i><strong>{milliseconds < 10 ? milliseconds.toFixed(1) : milliseconds.toFixed(0)} ms</strong></span>
-      ))}
-    </div>
-  )
-}
-
-function RadianceBreakdown({ physicalGlow }: { physicalGlow: PhysicalGlowAnalysisState }) {
-  const result = physicalGlow.result
-  const rings = physicalGlow.emissionDiagnostics?.rings
-  if (!result || !rings) return null
-  const groups = [
-    { label: '0–20 km', minimum: 0, maximum: 20 },
-    { label: '20–100 km', minimum: 20, maximum: 100 },
-    { label: '100–300 km', minimum: 100, maximum: 300 },
-    { label: '300–1000 km', minimum: 300, maximum: 1001 },
-  ].map((group) => {
-    let radiance = 0
-    rings.forEach((entry, ringIndex) => {
-      if (entry.ring.midpointKm < group.minimum || entry.ring.midpointKm >= group.maximum) return
-      const base = ringIndex * 3
-      radiance += luminance(
-        result.ringMeanRgbRadiance[base],
-        result.ringMeanRgbRadiance[base + 1],
-        result.ringMeanRgbRadiance[base + 2],
-      )
-    })
-    return { ...group, radiance }
-  })
-  const total = groups.reduce((sum, group) => sum + group.radiance, 0)
-  const sourceLayers = result.componentContributions.map((component) => ({
-    id: component.id,
-    label: component.label ?? component.id,
-    radiance: luminance(
-      component.meanRgbRadiance[0],
-      component.meanRgbRadiance[1],
-      component.meanRgbRadiance[2],
-    ),
-  })).filter((component) => component.radiance > 0)
-  const sourceLayerTotal = sourceLayers.reduce((sum, component) => sum + component.radiance, 0)
-  return (
-    <div className="radiance-breakdown">
-      <div className="breakdown-heading"><span>Glow by distance</span><strong>{(result.diagnostics.distantContributionFraction * 100).toFixed(1)}% beyond 300 km</strong></div>
-      {groups.map((group) => {
-        const fraction = total > 0 ? group.radiance / total : 0
-        return (
-          <div className="radiance-row" key={group.label}>
-            <span>{group.label}</span>
-            <i><b style={{ width: `${fraction * 100}%` }} /></i>
-            <strong>{Math.round(fraction * 100)}%</strong>
-          </div>
-        )
-      })}
-      {sourceLayers.length > 0 && (
-        <>
-          <div className="breakdown-heading source-heading"><span>Glow by source layer</span><strong>{sourceLayers.length}</strong></div>
-          {sourceLayers.map((component) => {
-            const fraction = sourceLayerTotal > 0 ? component.radiance / sourceLayerTotal : 0
-            return (
-              <div className="radiance-row source-layer-row" key={component.id}>
-                <span title={component.label}>{component.label}</span>
-                <i><b style={{ width: `${fraction * 100}%` }} /></i>
-                <strong>{Math.round(fraction * 100)}%</strong>
-              </div>
-            )
-          })}
-        </>
-      )}
-      <div className="model-badges">
-        <span>Rayleigh</span><span>Aerosol</span><span>Cloud</span><span>Multiple scatter</span>
-      </div>
-    </div>
-  )
-}
-
-function luminance(red: number, green: number, blue: number) {
-  return Math.max(0, red * 0.2126 + green * 0.7152 + blue * 0.0722)
+  return matches
 }
 
 function toLocalInput(date: Date) {
   const adjusted = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
   return adjusted.toISOString().slice(0, 16)
+}
+
+function deviceTimeZoneLabel(date: Date) {
+  const name = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const offsetMinutes = -date.getTimezoneOffset()
+  const sign = offsetMinutes >= 0 ? '+' : '−'
+  const absoluteMinutes = Math.abs(offsetMinutes)
+  const hours = Math.floor(absoluteMinutes / 60)
+  const minutes = absoluteMinutes % 60
+  const offset = `UTC${sign}${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+  return name ? `${name} (${offset})` : offset
+}
+
+function formatFieldOfView(fov: number) {
+  if (fov >= 10) return `${Math.round(fov)}°`
+  if (fov >= 1) return `${fov.toFixed(1)}°`
+  return `${(fov * 60).toFixed(fov < 0.2 ? 1 : 0)}′`
 }
 
 function compassDirection(degrees: number) {

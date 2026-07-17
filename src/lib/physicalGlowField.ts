@@ -2,7 +2,8 @@ import type { PhysicalGlowResult } from './physicalGlowProtocol'
 import { STAR_CATALOG } from '../data/starCatalog'
 import { equatorialToHorizontal } from './astronomy'
 import { apparentStarMagnitude, cloudAdjustedLimitingMagnitude } from './starAppearance'
-import { NATURAL_SKY_LUMINANCE } from './appearance'
+import { NATURAL_SKY_LUMINANCE } from './photometry'
+import { moonZenithLuminanceRatio, solarZenithLuminanceRatio } from './celestialLight'
 import { solidAngleElevationWeights } from './physics'
 import type { Atmosphere, Location, SkyMetrics } from '../types'
 
@@ -113,10 +114,11 @@ export function calculatePhysicalSkyMetrics(
 ): SkyMetrics {
   const zenith = physicalZenithSample(field)
   const naturalLuminance = NATURAL_SKY_LUMINANCE
-  const twilight = clamp((sunAltitude + 18) / 18, 0, 1)
-  const brightnessRatio = 1 + zenith.luminance / naturalLuminance + twilight * 180 + moonLight * 8
-  const zenithMag = clamp(21.92 - 2.5 * Math.log10(brightnessRatio), 14, 21.92)
-  const lightPenalty = twilight * 5 + moonLight * 1.35
+  const solarRatio = solarZenithLuminanceRatio(sunAltitude)
+  const lunarRatio = moonZenithLuminanceRatio(moonLight)
+  const brightnessRatio = 1 + zenith.luminance / naturalLuminance + solarRatio + lunarRatio
+  const zenithMag = clamp(21.92 - 2.5 * Math.log10(brightnessRatio), 3, 21.92)
+  const lightPenalty = 1.45 * Math.log10(1 + solarRatio + lunarRatio)
   const limitingMagnitude = clamp(
     cloudAdjustedLimitingMagnitude(zenith.limitingMagnitude - lightPenalty, 90, atmosphere),
     0,

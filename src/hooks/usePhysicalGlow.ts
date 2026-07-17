@@ -12,6 +12,7 @@ import type {
   PhysicalGlowResult,
   PhysicalGlowWorkerMessage,
 } from '../lib/physicalGlowProtocol'
+import { NATURAL_SKY_RGB } from '../lib/photometry'
 import { loadPrecomputedWeatherKernel } from '../lib/precomputedWeatherKernels'
 import { DEFAULT_SKY_ELEVATIONS_DEG } from '../lib/physics'
 import type { Atmosphere, Location } from '../types'
@@ -229,7 +230,7 @@ export function usePhysicalGlow(
           options: {
             debounceMs: 80,
             progressWeights: DEFAULT_WEIGHTS,
-            naturalSkyRadianceRgb: [0.0016, 0.002, 0.0032],
+            naturalSkyRadianceRgb: NATURAL_SKY_RGB,
             darkSkyLimitingMagnitude: 7.15,
             limitingMagnitudeSlope: 1.18,
             estimateOuterBoundary: true,

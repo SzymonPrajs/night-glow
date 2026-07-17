@@ -37,9 +37,9 @@ test('reports real solver progress and recomputes an atmosphere preset', async (
   await expect(page.getByText('720', { exact: true }).first()).toBeVisible()
   await expect(page.locator('.analysis-grid')).toContainText('22adaptive elevations')
   await expect(page.getByText('8', { exact: true }).first()).toBeVisible()
-  await expect(page.locator('canvas')).toBeVisible()
+  await expect(page.locator('canvas.sky-canvas')).toBeVisible()
 
-  await page.locator('canvas').hover()
+  await page.locator('canvas.sky-canvas').hover()
   await page.mouse.wheel(0, -600)
   await page.waitForTimeout(250)
   await expect(progress).toHaveAttribute('aria-valuetext', 'Physical sky field ready')

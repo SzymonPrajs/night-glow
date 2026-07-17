@@ -1,16 +1,59 @@
 import * as THREE from 'three'
 import type { CatalogStar } from '../data/starCatalog'
-import type { AppearanceMode, Atmosphere } from '../types'
+import type { Atmosphere, SeeingConditions } from '../types'
+import { interpolateAppearanceValue, normalizeEnhancement } from './appearance'
+import { DEFAULT_SEEING_CONDITIONS, seeingPsf, type SeeingPsf } from './seeing'
 import { clamp } from './skyModel'
 
-export type StarAppearance = {
+export type StarVisualEndpoint = {
+  /** Linear-light display colour; unitless RGB components. */
   color: THREE.Color
-  size: number
-  opacity: number
-  coreWidth: number
-  haloWidth: number
+  /** Diameter of the point sprite in CSS pixels. */
+  spriteSizeCssPixels: number
+  /** Presentation signal before the shared physical visibility fade. */
+  signal: number
+  /** Gaussian core sigma in CSS pixels. */
+  coreSigmaCssPixels: number
+  /** Gaussian halo sigma in CSS pixels. */
+  haloSigmaCssPixels: number
   haloStrength: number
-  dispersion: number
+}
+
+export type RealisticStarVisual = StarVisualEndpoint & {
+  /** Chromatic displacement from green to either outer channel, in arcseconds. */
+  dispersionArcseconds: number
+}
+
+export type EnhancedStarVisual = StarVisualEndpoint & {
+  /** Chromatic displacement from green to either outer channel, in CSS pixels. */
+  dispersionCssPixels: number
+}
+
+export type StarAppearance = {
+  /** Extinguished apparent visual magnitude shared by every presentation value. */
+  apparentMagnitude: number
+  /** Integrated stellar signal; seeing redistributes it without changing it. */
+  physicalFlux: number
+  /** Angular atmospheric PSF shared by every presentation value. */
+  psf: SeeingPsf
+  /** Physical detection fade shared by every presentation value. */
+  visibility: number
+  realistic: RealisticStarVisual
+  enhanced: EnhancedStarVisual
+}
+
+export type StarVisualCssPixels = StarVisualEndpoint & {
+  dispersionCssPixels: number
+}
+
+export type StarAppearanceCssEndpoints = {
+  realistic: StarVisualCssPixels
+  enhanced: StarVisualCssPixels
+}
+
+export type InterpolatedStarAppearance = StarVisualCssPixels & {
+  apparentMagnitude: number
+  visibility: number
 }
 
 export function starAppearance(
@@ -18,16 +61,42 @@ export function starAppearance(
   altitude: number,
   limitingMagnitude: number,
   atmosphere: Atmosphere,
-  mode: AppearanceMode = 'atlas',
+  seeing: SeeingConditions = DEFAULT_SEEING_CONDITIONS,
 ): StarAppearance {
   const apparentMagnitude = apparentStarMagnitude(star, altitude, atmosphere)
   const visibility = starVisibility(apparentMagnitude, limitingMagnitude)
-  if (mode === 'realistic') {
-    return realisticStarAppearance(star, altitude, atmosphere, apparentMagnitude, visibility)
-  }
-
   const airMass = relativeAirMass(altitude)
   const extraColumn = Math.max(0, airMass - 1)
+
+  return {
+    apparentMagnitude,
+    physicalFlux: realisticStarPeak(apparentMagnitude),
+    psf: seeingPsf(seeing, altitude),
+    visibility,
+    realistic: realisticStarAppearance(
+      star,
+      altitude,
+      atmosphere,
+      apparentMagnitude,
+      extraColumn,
+    ),
+    enhanced: enhancedStarAppearance(
+      star,
+      atmosphere,
+      apparentMagnitude,
+      airMass,
+      extraColumn,
+    ),
+  }
+}
+
+function enhancedStarAppearance(
+  star: CatalogStar,
+  atmosphere: Atmosphere,
+  apparentMagnitude: number,
+  airMass: number,
+  extraColumn: number,
+): EnhancedStarVisual {
   const flux = 10 ** (-0.4 * apparentMagnitude)
   const brightnessScale = clamp(flux ** 0.2, 0.22, 1.6)
   const seeing = 0.75 + atmosphere.aerosol * 0.65 + atmosphere.humidity * 0.35 + atmosphere.cloud * 0.55
@@ -41,21 +110,26 @@ export function starAppearance(
     0.03,
     0.55,
   )
-  const size = clamp(coreDiameter * (2.2 + haloStrength * 5) + brightnessScale * 1.5, 3.5, 30)
-  const dispersionPixels = clamp(
+  const spriteSizeCssPixels = clamp(
+    coreDiameter * (2.2 + haloStrength * 5) + brightnessScale * 1.5,
+    3.5,
+    30,
+  )
+  const haloWidth = 0.27 + atmosphere.aerosol * 0.08 + atmosphere.humidity * 0.05 + atmosphere.cloud * 0.06
+  const dispersionCssPixels = clamp(
     extraColumn * (0.035 + atmosphere.aerosol * 0.035 + atmosphere.humidity * 0.02),
     0,
     1.7,
   )
 
   return {
-    color: observedStarColor(star.bv, star.spectralType, extraColumn, atmosphere, 'atlas', apparentMagnitude),
-    size,
-    opacity: visibility * clamp(1.08 - apparentMagnitude * 0.025, 0.68, 1),
-    coreWidth: clamp((0.849 * coreDiameter) / size, 0.045, 0.42),
-    haloWidth: 0.27 + atmosphere.aerosol * 0.08 + atmosphere.humidity * 0.05 + atmosphere.cloud * 0.06,
+    color: enhancedObservedStarColor(star.bv, star.spectralType, extraColumn, atmosphere),
+    spriteSizeCssPixels,
+    signal: enhancedStarSignal(apparentMagnitude),
+    coreSigmaCssPixels: 0.849 * coreDiameter / 2,
+    haloSigmaCssPixels: haloWidth * spriteSizeCssPixels / 2,
     haloStrength,
-    dispersion: (dispersionPixels * 2) / size,
+    dispersionCssPixels,
   }
 }
 
@@ -64,10 +138,8 @@ function realisticStarAppearance(
   altitude: number,
   atmosphere: Atmosphere,
   apparentMagnitude: number,
-  visibility: number,
-): StarAppearance {
-  const airMass = relativeAirMass(altitude)
-  const extraColumn = Math.max(0, airMass - 1)
+  extraColumn: number,
+): RealisticStarVisual {
   const peakIntensity = realisticStarPeak(apparentMagnitude)
 
   // At a wide naked-eye field the displayed core is sampling-limited. Seeing
@@ -82,28 +154,116 @@ function realisticStarAppearance(
     0.015,
     0.1,
   )
-  const sigmaCore = coreFwhm / 2.355
-  const sigmaHalo = clamp(0.78 + atmosphere.aerosol * 0.22 + atmosphere.humidity * 0.12, 0.78, 1.15)
-  const size = clamp(2.85 + haloEnergy * 7 + Math.sqrt(extraColumn) * 0.045, 2.85, 4.2)
-  const haloStrength = haloEnergy / (1 - haloEnergy) * (sigmaCore / sigmaHalo) ** 2
-  const psfIntegral = 2 * Math.PI * sigmaCore ** 2 / (1 - haloEnergy)
-  const dispersionArcsec = realisticDispersionArcsec(altitude)
+  const coreSigmaCssPixels = coreFwhm / 2.355
+  const haloSigmaCssPixels = clamp(
+    0.78 + atmosphere.aerosol * 0.22 + atmosphere.humidity * 0.12,
+    0.78,
+    1.15,
+  )
+  const spriteSizeCssPixels = clamp(
+    2.85 + haloEnergy * 7 + Math.sqrt(extraColumn) * 0.045,
+    2.85,
+    4.2,
+  )
+  const haloStrength = haloEnergy / (1 - haloEnergy) *
+    (coreSigmaCssPixels / haloSigmaCssPixels) ** 2
+  const psfIntegral = 2 * Math.PI * coreSigmaCssPixels ** 2 / (1 - haloEnergy)
 
   return {
-    color: observedStarColor(
+    color: realisticObservedStarColor(
       star.bv,
       star.spectralType,
       extraColumn,
       atmosphere,
-      'realistic',
       apparentMagnitude,
     ),
-    size,
-    opacity: visibility * peakIntensity / psfIntegral,
-    coreWidth: clamp((2 * sigmaCore) / size, 0.08, 0.42),
-    haloWidth: clamp((2 * sigmaHalo) / size, 0.3, 0.75),
+    spriteSizeCssPixels,
+    signal: peakIntensity / psfIntegral,
+    coreSigmaCssPixels,
+    haloSigmaCssPixels,
     haloStrength,
-    dispersion: (dispersionArcsec * 2) / size,
+    dispersionArcseconds: realisticDispersionArcsec(altitude),
+  }
+}
+
+/**
+ * Converts both endpoint dispersions to CSS pixels before interpolation. This
+ * keeps angular Realistic dispersion camera-aware while Enhanced remains a
+ * screen-space presentation effect.
+ */
+export function starAppearanceCssEndpoints(
+  appearance: StarAppearance,
+  cssPixelsPerArcsecond: number,
+): StarAppearanceCssEndpoints {
+  return {
+    realistic: {
+      ...sanitizeVisualEndpoint(appearance.realistic),
+      dispersionCssPixels: dispersionArcsecondsToCssPixels(
+        appearance.realistic.dispersionArcseconds,
+        cssPixelsPerArcsecond,
+      ),
+    },
+    enhanced: {
+      ...sanitizeVisualEndpoint(appearance.enhanced),
+      dispersionCssPixels: finiteClamp(appearance.enhanced.dispersionCssPixels, 0, 1.7, 0),
+    },
+  }
+}
+
+export function interpolateStarVisual(
+  realistic: StarVisualCssPixels,
+  enhanced: StarVisualCssPixels,
+  enhancement: number,
+): StarVisualCssPixels {
+  const mix = normalizeEnhancement(enhancement)
+  const realisticVisual = sanitizeCssVisual(realistic)
+  const enhancedVisual = sanitizeCssVisual(enhanced, realisticVisual)
+
+  return {
+    color: new THREE.Color(
+      interpolateAppearanceValue(realisticVisual.color.r, enhancedVisual.color.r, mix),
+      interpolateAppearanceValue(realisticVisual.color.g, enhancedVisual.color.g, mix),
+      interpolateAppearanceValue(realisticVisual.color.b, enhancedVisual.color.b, mix),
+    ),
+    spriteSizeCssPixels: interpolateAppearanceValue(
+      realisticVisual.spriteSizeCssPixels,
+      enhancedVisual.spriteSizeCssPixels,
+      mix,
+    ),
+    signal: interpolateAppearanceValue(realisticVisual.signal, enhancedVisual.signal, mix),
+    coreSigmaCssPixels: interpolateAppearanceValue(
+      realisticVisual.coreSigmaCssPixels,
+      enhancedVisual.coreSigmaCssPixels,
+      mix,
+    ),
+    haloSigmaCssPixels: interpolateAppearanceValue(
+      realisticVisual.haloSigmaCssPixels,
+      enhancedVisual.haloSigmaCssPixels,
+      mix,
+    ),
+    haloStrength: interpolateAppearanceValue(
+      realisticVisual.haloStrength,
+      enhancedVisual.haloStrength,
+      mix,
+    ),
+    dispersionCssPixels: interpolateAppearanceValue(
+      realisticVisual.dispersionCssPixels,
+      enhancedVisual.dispersionCssPixels,
+      mix,
+    ),
+  }
+}
+
+export function interpolateStarAppearance(
+  appearance: StarAppearance,
+  enhancement: number,
+  cssPixelsPerArcsecond: number,
+): InterpolatedStarAppearance {
+  const endpoints = starAppearanceCssEndpoints(appearance, cssPixelsPerArcsecond)
+  return {
+    apparentMagnitude: finiteNumber(appearance.apparentMagnitude, 0),
+    visibility: finiteClamp(appearance.visibility, 0, 1, 0),
+    ...interpolateStarVisual(endpoints.realistic, endpoints.enhanced, enhancement),
   }
 }
 
@@ -147,18 +307,16 @@ export function cloudAdjustedLimitingMagnitude(
   return backgroundLimit - directCloudExtinction(altitude, atmosphere)
 }
 
-/** Shared physical selection/fade used by every presentation mode. */
+/** Shared physical selection/fade used by every presentation value. */
 export function starVisibility(apparentMagnitude: number, limitingMagnitude: number) {
   return clamp((limitingMagnitude - apparentMagnitude + 0.32) / 0.68, 0, 1)
 }
 
-function observedStarColor(
+function observedStarBaseColor(
   bv: number | null,
   spectralType: string,
   extraAirMass: number,
   atmosphere: Atmosphere,
-  mode: AppearanceMode,
-  apparentMagnitude: number,
 ) {
   const intrinsicBv = bv ?? spectralTypeBv(spectralType)
   const color = blackbodyColor(bvTemperature(intrinsicBv))
@@ -171,16 +329,34 @@ function observedStarColor(
   color.r *= Math.exp(-0.45 * column)
   color.g *= Math.exp(-0.72 * column)
   color.b *= Math.exp(-1.35 * column)
-  if (mode === 'realistic') {
-    const saturation = 0.04 + 0.3 * (1 - smoothstep(-1, 3, apparentMagnitude))
-    const luminance = 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b
-    color.r = luminance + (color.r - luminance) * saturation
-    color.g = luminance + (color.g - luminance) * saturation
-    color.b = luminance + (color.b - luminance) * saturation
-    const observedLuminance = 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b
-    if (observedLuminance > 0) color.multiplyScalar(1 / observedLuminance)
-    return color
-  }
+  return { color, originalPeak }
+}
+
+function realisticObservedStarColor(
+  bv: number | null,
+  spectralType: string,
+  extraAirMass: number,
+  atmosphere: Atmosphere,
+  apparentMagnitude: number,
+) {
+  const { color } = observedStarBaseColor(bv, spectralType, extraAirMass, atmosphere)
+  const saturation = 0.04 + 0.3 * (1 - smoothstep(-1, 3, apparentMagnitude))
+  const luminance = 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b
+  color.r = luminance + (color.r - luminance) * saturation
+  color.g = luminance + (color.g - luminance) * saturation
+  color.b = luminance + (color.b - luminance) * saturation
+  const observedLuminance = 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b
+  if (observedLuminance > 0) color.multiplyScalar(1 / observedLuminance)
+  return color
+}
+
+function enhancedObservedStarColor(
+  bv: number | null,
+  spectralType: string,
+  extraAirMass: number,
+  atmosphere: Atmosphere,
+) {
+  const { color, originalPeak } = observedStarBaseColor(bv, spectralType, extraAirMass, atmosphere)
   const observedPeak = Math.max(color.r, color.g, color.b)
   if (observedPeak > 0) color.multiplyScalar(originalPeak / observedPeak)
   return color
@@ -190,12 +366,29 @@ export function realisticStarPeak(apparentMagnitude: number) {
   return 0.35 * 10 ** (-0.4 * apparentMagnitude)
 }
 
+/** A monotonic, compressed version of stellar flux for the Enhanced endpoint. */
+export function enhancedStarSignal(apparentMagnitude: number) {
+  const magnitude = finiteNumber(apparentMagnitude, 0)
+  const compressedFlux = clamp(10 ** (-0.08 * magnitude), 0.22, 1.6)
+  const legacyOpacity = clamp(1.08 - magnitude * 0.025, 0.68, 1)
+  return compressedFlux * legacyOpacity
+}
+
 export function realisticDispersionPixels(altitude: number) {
-  return clamp(realisticDispersionArcsec(altitude) * 0.0036, 0, 0.35)
+  return dispersionArcsecondsToCssPixels(realisticDispersionArcsec(altitude), 0.0036)
+}
+
+export function dispersionArcsecondsToCssPixels(
+  dispersionArcseconds: number,
+  cssPixelsPerArcsecond: number,
+) {
+  const arcseconds = Math.max(0, finiteNumber(dispersionArcseconds, 0))
+  const scale = Math.max(0, finiteNumber(cssPixelsPerArcsecond, 0))
+  return clamp(arcseconds * scale, 0, 0.35)
 }
 
 export function realisticDispersionArcsec(altitude: number) {
-  const safeAltitude = clamp(altitude, 0.5, 90)
+  const safeAltitude = clamp(finiteNumber(altitude, 90), 0.5, 90)
   return Math.max(0, 1.2 / Math.tan((safeAltitude * Math.PI) / 180))
 }
 
@@ -210,8 +403,57 @@ export function relativeAirMass(altitude: number) {
   return clamp(1 / (sine + 0.50572 * (safeAltitude + 6.07995) ** -1.6364), 1, 20)
 }
 
+function sanitizeVisualEndpoint(
+  visual: StarVisualEndpoint,
+  fallback?: StarVisualEndpoint,
+): StarVisualEndpoint {
+  const fallbackColor = fallback?.color ?? new THREE.Color(0, 0, 0)
+  return {
+    color: new THREE.Color(
+      finiteNumber(visual.color.r, fallbackColor.r),
+      finiteNumber(visual.color.g, fallbackColor.g),
+      finiteNumber(visual.color.b, fallbackColor.b),
+    ),
+    spriteSizeCssPixels: finiteNonNegative(
+      visual.spriteSizeCssPixels,
+      fallback?.spriteSizeCssPixels ?? 0,
+    ),
+    signal: finiteNonNegative(visual.signal, fallback?.signal ?? 0),
+    coreSigmaCssPixels: finiteNonNegative(
+      visual.coreSigmaCssPixels,
+      fallback?.coreSigmaCssPixels ?? 0,
+    ),
+    haloSigmaCssPixels: finiteNonNegative(
+      visual.haloSigmaCssPixels,
+      fallback?.haloSigmaCssPixels ?? 0,
+    ),
+    haloStrength: finiteNonNegative(visual.haloStrength, fallback?.haloStrength ?? 0),
+  }
+}
+
+function sanitizeCssVisual(
+  visual: StarVisualCssPixels,
+  fallback?: StarVisualCssPixels,
+): StarVisualCssPixels {
+  return {
+    ...sanitizeVisualEndpoint(visual, fallback),
+    dispersionCssPixels: finiteNonNegative(
+      visual.dispersionCssPixels,
+      fallback?.dispersionCssPixels ?? 0,
+    ),
+  }
+}
+
 function finiteClamp(value: number, minimum: number, maximum: number, fallback: number) {
   return clamp(Number.isFinite(value) ? value : fallback, minimum, maximum)
+}
+
+function finiteNumber(value: number, fallback: number) {
+  return Number.isFinite(value) ? value : fallback
+}
+
+function finiteNonNegative(value: number, fallback: number) {
+  return Math.max(0, finiteNumber(value, fallback))
 }
 
 function spectralTypeBv(spectralType: string) {

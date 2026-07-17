@@ -1,64 +1,102 @@
 import type { PhysicalGlowResult } from './physicalGlowProtocol'
-import type { AppearanceMode } from '../types'
+import { NATURAL_SKY_LUMINANCE, rgbLuminance } from './photometry'
+import { moonZenithLuminanceRatio, solarZenithLuminanceRatio } from './celestialLight'
 
 export type AppearanceProfile = {
-  rendererExposure: number
   starDisplayGain: number
   milkyWayOpacity: number
   deepSkyOpacity: number
   planetOpacity: number
 }
 
-export const APPEARANCE_PROFILES: Record<AppearanceMode, AppearanceProfile> = {
-  atlas: {
-    rendererExposure: 1.1,
-    starDisplayGain: 1,
-    milkyWayOpacity: 0.24,
-    deepSkyOpacity: 1,
-    planetOpacity: 1,
-  },
-  realistic: {
-    rendererExposure: 1,
-    starDisplayGain: 1.6,
-    milkyWayOpacity: 0.045,
-    deepSkyOpacity: 0.16,
-    planetOpacity: 0.62,
-  },
+export const REALISTIC_APPEARANCE_PROFILE: Readonly<AppearanceProfile> = Object.freeze({
+  starDisplayGain: 1.6,
+  milkyWayOpacity: 0.045,
+  deepSkyOpacity: 0.16,
+  planetOpacity: 0.62,
+})
+
+export const ENHANCED_APPEARANCE_PROFILE: Readonly<AppearanceProfile> = Object.freeze({
+  starDisplayGain: 1,
+  milkyWayOpacity: 0.24,
+  deepSkyOpacity: 1,
+  planetOpacity: 1,
+})
+
+export const APPEARANCE_ENDPOINTS = Object.freeze({
+  realistic: REALISTIC_APPEARANCE_PROFILE,
+  enhanced: ENHANCED_APPEARANCE_PROFILE,
+})
+
+export function normalizeEnhancement(enhancement: number) {
+  if (!Number.isFinite(enhancement)) return 0
+  return Math.max(0, Math.min(1, enhancement))
 }
 
-/** Linear RGB used by the solver for a natural moonless sky. */
-export const NATURAL_SKY_RGB = [0.0016, 0.002, 0.0032] as const
-export const NATURAL_SKY_LUMINANCE = rgbLuminance(NATURAL_SKY_RGB)
+export const clampEnhancement = normalizeEnhancement
+
+export function interpolateAppearanceValue(
+  realisticValue: number,
+  enhancedValue: number,
+  enhancement: number,
+) {
+  const realistic = Number.isFinite(realisticValue) ? realisticValue : 0
+  const enhanced = Number.isFinite(enhancedValue) ? enhancedValue : realistic
+  return realistic + (enhanced - realistic) * normalizeEnhancement(enhancement)
+}
+
+export function interpolateAppearanceProfile(enhancement: number): AppearanceProfile {
+  return {
+    starDisplayGain: interpolateAppearanceValue(
+      REALISTIC_APPEARANCE_PROFILE.starDisplayGain,
+      ENHANCED_APPEARANCE_PROFILE.starDisplayGain,
+      enhancement,
+    ),
+    milkyWayOpacity: interpolateAppearanceValue(
+      REALISTIC_APPEARANCE_PROFILE.milkyWayOpacity,
+      ENHANCED_APPEARANCE_PROFILE.milkyWayOpacity,
+      enhancement,
+    ),
+    deepSkyOpacity: interpolateAppearanceValue(
+      REALISTIC_APPEARANCE_PROFILE.deepSkyOpacity,
+      ENHANCED_APPEARANCE_PROFILE.deepSkyOpacity,
+      enhancement,
+    ),
+    planetOpacity: interpolateAppearanceValue(
+      REALISTIC_APPEARANCE_PROFILE.planetOpacity,
+      ENHANCED_APPEARANCE_PROFILE.planetOpacity,
+      enhancement,
+    ),
+  }
+}
 
 /**
  * Relative visual response for an uncalibrated SDR display.
  *
  * The physical solver remains linear. Only the final presentation is compressed:
- * a natural sky maps to 0.0015 linear display luminance, and increasing sky
- * luminance follows a 0.42 power law that approximates dark/mesopic adaptation.
+ * a natural sky maps to 0.006 linear display luminance. A shallow power curve
+ * spans dark-adapted night vision through daylight without clipping every sky
+ * brighter than twilight to the same dim grey.
  */
 export function realisticSkyDisplayLuminance(physicalLuminance: number) {
   const ratio = Math.max(1e-6, physicalLuminance / NATURAL_SKY_LUMINANCE)
-  return Math.min(0.03, 0.0015 * ratio ** 0.42)
+  return Math.min(0.55, 0.006 * ratio ** 0.22)
 }
 
 export function realisticBaseSkyLuminance(sunAltitude: number, moonLight = 0, horizon = 0) {
   const horizonMix = Math.max(0, Math.min(1, horizon))
-  const twilight = Math.max(0, Math.min(1, (sunAltitude + 18) / 18))
+  const solarRatio = solarZenithLuminanceRatio(sunAltitude)
+  const solarHorizonBoost = sunAltitude < 0 ? 6 : 0.75
   return NATURAL_SKY_LUMINANCE * (
     1 + horizonMix * 0.45 +
-    180 * twilight * (1 + horizonMix * 1.6) +
-    8 * Math.max(0, moonLight) * (1 + horizonMix * 0.5)
+    solarRatio * (1 + horizonMix * solarHorizonBoost) +
+    moonZenithLuminanceRatio(moonLight) * (1 + horizonMix * 0.7)
   )
 }
 
 export function linearToSrgb(value: number) {
   const safe = Math.max(0, value)
   return safe <= 0.0031308 ? safe * 12.92 : 1.055 * safe ** (1 / 2.4) - 0.055
-}
-
-export function rgbLuminance(rgb: ArrayLike<number>) {
-  return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]
 }
 
 /**
@@ -68,7 +106,7 @@ export function rgbLuminance(rgb: ArrayLike<number>) {
  */
 export function realisticStarDisplaySignal(signal: number) {
   const safe = Number.isFinite(signal) ? Math.max(0, signal) : 0
-  const gain = APPEARANCE_PROFILES.realistic.starDisplayGain
+  const gain = REALISTIC_APPEARANCE_PROFILE.starDisplayGain
   return safe * gain / (1 + (gain - 1) * safe)
 }
 
