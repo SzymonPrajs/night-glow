@@ -34,7 +34,7 @@ Checkboxes are intentionally open. Creating this design does not resolve them.
 ## Atmosphere and radiative transfer
 
 - [x] Establish the ownership boundary: Environment owns 4-D environmental state and evidence/fallback semantics; Physics owns state-to-spectral-optics closure and all propagation.
-- [ ] Implement and test the `AtmosphereFieldProvider` adapter and shared native/Wasm conformance fixture.
+- [x] Implement and test the first-slice `AtmosphereFieldProvider` adapter and shared native/Wasm conformance fixture; regional chunk planning/interpolation remains phase-gated.
 - [ ] Choose the Physics volume/grid representation and conservative interpolation from hybrid/pressure/height/surface coordinates.
 - [x] Define canonical `SourceEvidenceClass`, `AtmosphereSelectionMode`, time/revision identities and `ObserverScenario`; implementation must preserve them in scenarios and caches.
 - [ ] Validate that source-to-observer domain selection includes polluted source air, elevated plumes, clouds and Earth curvature rather than only the observer column.
@@ -94,7 +94,7 @@ Checkboxes are intentionally open. Creating this design does not resolve them.
 - [ ] Define atmospheric/surface transfer LUT axes and interpolation error checks.
 - [ ] Consume atmosphere chunks and manifests rather than importing global forecast/reanalysis archives inside Physics.
 - [ ] Define catalogue/diffuse/terrain tile formats and spatial indexes; consume rather than redefine the Environment emission domain release/chunk format.
-- [ ] Consume the emission-domain conformance fixture in native and Wasm tests instead of inventing a second emission schema.
+- [x] Consume the emission-domain conformance fixture in native and Wasm tests instead of inventing a second emission schema.
 - [ ] Add resumable jobs without publishing incomplete outputs.
 - [ ] Emit per-product provenance, uncertainty, convergence, statistics, and hashes.
 - [ ] Produce a small openly redistributable fixture for CI and review.
@@ -123,7 +123,7 @@ Checkboxes are intentionally open. Creating this design does not resolve them.
 ## Validation and release
 
 - [ ] Create analytic limiting cases and unit-level invariants for every module.
-- [ ] Run the emission-domain and atmosphere-domain boundary conformance fixtures in native and Wasm Physics builds.
+- [x] Run the first-slice emission-domain and atmosphere-domain boundary conformance fixtures in native and Wasm Physics builds; broader real-data cases remain open.
 - [ ] Compare radiative transfer to libRadtran or another accepted reference solver.
 - [ ] Compare astrometry to SOFA/JPL reference cases.
 - [ ] Compare PSF metrics with ESO conventions and synthetic flux tests.

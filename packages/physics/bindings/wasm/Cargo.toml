@@ -11,6 +11,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 nightglow-core = { path = "../../crates/nightglow-core" }
 nightglow-data = { path = "../../crates/nightglow-data" }
+nightglow-environment = { path = "../../crates/nightglow-environment" }
 nightglow-physics = { path = "../../crates/nightglow-physics" }
 nightglow-solver = { path = "../../crates/nightglow-solver" }
 

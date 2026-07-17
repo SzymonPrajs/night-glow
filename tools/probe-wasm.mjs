@@ -24,6 +24,8 @@ for (const [name, path] of Object.entries(paths)) {
 
 const solve = instances.physics.exports.nightglow_exponential_transmittance
 assert.equal(typeof solve, 'function')
+const wasmAtmosphereMeanSurfacePressure = instances.physics.exports.nightglow_atmosphere_fixture_mean_surface_pressure_pa()
+assert.equal(wasmAtmosphereMeanSurfacePressure, 99_850)
 
 let maxRelativeError = 0
 for (const [beta, scale, path, intervals] of [
@@ -54,6 +56,7 @@ assert.equal(environmentTotal, 70)
 const report = {
   modules: timings,
   fixture_directional_intensity_w_sr: environmentTotal,
+  fixture_mean_surface_pressure_pa: wasmAtmosphereMeanSurfacePressure,
   max_js_wasm_relative_error: maxRelativeError,
   max_render_product_relative_error: maxProductRelativeError,
 }

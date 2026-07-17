@@ -4,6 +4,7 @@ use nightglow_core::{
     EnvironmentInputs, ExtinctionPerMetre, ObserverScenario, PathLengthMetres, StableId, UtcInstant,
 };
 use nightglow_data::decode_physics_assets;
+use nightglow_environment::decode_environment_inputs;
 use nightglow_physics::{exponential_optical_depth_trapezoid, transmittance};
 use nightglow_solver::{CancellationToken, solve_scenario};
 use std::cell::RefCell;
@@ -15,6 +16,16 @@ thread_local! {
 #[unsafe(no_mangle)]
 pub extern "C" fn nightglow_physics_abi_revision() -> u32 {
     1
+}
+
+/// Decodes the shared language-neutral Environment fixtures through the Physics adapter.
+#[unsafe(no_mangle)]
+pub extern "C" fn nightglow_atmosphere_fixture_mean_surface_pressure_pa() -> f64 {
+    decode_environment_inputs(
+        include_str!("../../../../contracts/fixtures/v1/emission-release.json"),
+        include_str!("../../../../contracts/fixtures/v1/atmosphere-release.json"),
+    )
+    .map_or(f64::NAN, |inputs| inputs.mean_surface_pressure_pa)
 }
 
 /// Computes transmittance through an exponential profile using shared Physics.
@@ -101,5 +112,13 @@ mod tests {
         assert_eq!(nightglow_first_slice_output_len(), 24);
         nightglow_physics_release_output();
         assert_eq!(nightglow_first_slice_output_len(), 0);
+    }
+
+    #[test]
+    fn wasm_adapter_decodes_the_shared_atmosphere_fixture() {
+        assert_eq!(
+            nightglow_atmosphere_fixture_mean_surface_pressure_pa(),
+            99_850.0
+        );
     }
 }
