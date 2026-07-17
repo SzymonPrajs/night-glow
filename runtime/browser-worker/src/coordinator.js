@@ -27,6 +27,7 @@ export class Coordinator {
   }
 
   async initialize({ environmentModuleBytes, physicsModuleBytes, compatibilityManifest }) {
+    this.dispose()
     try {
       validateCompatibilityManifest(compatibilityManifest)
       const [environment, physics] = await Promise.all([
@@ -60,6 +61,7 @@ export class Coordinator {
   }
 
   capabilities() {
+    this.#requireInitialized()
     return {
       protocolRevision: PROTOCOL_REVISION,
       environmentAbiRevision: 1,
@@ -74,9 +76,7 @@ export class Coordinator {
   }
 
   diagnostics() {
-    if (!this.#environment || !this.#physics) {
-      throw new CoordinatorError('runtime_failure', 'Coordinator is not initialized')
-    }
+    this.#requireInitialized()
     return {
       memoryBytes: this.#environment.memory.buffer.byteLength + this.#physics.memory.buffer.byteLength,
       retainedEnvironmentInputValues: this.#environment.nightglow_environment_input_len(),
@@ -89,10 +89,18 @@ export class Coordinator {
     if (this.#activeRequest?.requestId === requestId) this.#activeRequest.cancelled = true
   }
 
+  dispose() {
+    if (this.#activeRequest) this.#activeRequest.cancelled = true
+    this.#environment?.nightglow_environment_release_buffers?.()
+    this.#physics?.nightglow_physics_release_output?.()
+    this.#activeRequest = undefined
+    this.#environment = undefined
+    this.#physics = undefined
+    this.#compatibility = undefined
+  }
+
   async commitScenario(request, onProgress = () => {}) {
-    if (!this.#environment || !this.#physics) {
-      throw new CoordinatorError('runtime_failure', 'Coordinator is not initialized')
-    }
+    this.#requireInitialized()
     if (this.#activeRequest) this.#activeRequest.cancelled = true
     const token = { requestId: request.requestId, cancelled: false }
     this.#activeRequest = token
@@ -146,6 +154,12 @@ export class Coordinator {
       completed: fraction,
       fidelity: 'synthetic-contract-only',
     })
+  }
+
+  #requireInitialized() {
+    if (!this.#environment || !this.#physics || !this.#compatibility) {
+      throw new CoordinatorError('runtime_failure', 'Coordinator is not initialized')
+    }
   }
 
   #summarizeEnvironment(request) {

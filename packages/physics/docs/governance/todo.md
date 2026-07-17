@@ -106,7 +106,7 @@ Checkboxes are intentionally open. Creating this design does not resolve them.
 - [x] Prove native/Wasm parity on the same serialized first-slice fixture; broader scientific fixtures remain phase-gated.
 - [x] Implement the single-worker first-slice baseline before optional shared-memory workers.
 - [ ] Measure copy versus transfer versus shared-memory costs.
-- [ ] Add revision-based cancellation, bounded yield points, progress with residuals, and memory reclamation.
+- [x] Add first-slice revision cancellation, bounded yield points, staged progress, buffer/runtime reclamation and stable-memory tests; numerical residual progress remains solver-phase work.
 - [ ] Define browsers without SIMD/threads and memory-pressure recovery.
 
 ## WebGL2 and delivery

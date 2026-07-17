@@ -49,7 +49,7 @@ coarse operations equivalent to:
 4. resolve Environment chunks and build contiguous query products;
 5. run bounded Physics stages with progress and cancellation points;
 6. return one coherent `ObserverRenderProductSet` or structured failure;
-7. release scenario, product, cache, and buffer handles explicitly.
+7. release scenario, product, cache, buffer, and runtime handles explicitly.
 
 Messages must carry protocol and schema revisions, request and scenario revision,
 dependency identities, and transfer ownership. Results from superseded scenarios
@@ -77,9 +77,10 @@ and rejects unregistered Environment/Physics/data/terrain identities before
 execution. It transfers one field-sized Environment buffer, publishes progress
 at bounded cancellation points, rejects superseded work, explicitly invalidates
 Wasm request/output views on success and failure, and returns a copied coherent
-float product with memory accounting. Repeated scenario tests verify stable
-linear-memory size after warm-up. The worker wrapper transfers product-buffer
-ownership to its caller and maps failures to stable categories.
+float product with memory accounting. Runtime disposal cancels pending work,
+releases Wasm-owned views, and drops both module instances. Repeated scenario
+tests verify stable linear-memory size after warm-up. The worker wrapper transfers
+product-buffer ownership to its caller and maps failures to stable categories.
 
 The implementation is deliberately fixture-sized. It does not fetch provider
 assets, manage production release handles/caches, run threads, or contain a

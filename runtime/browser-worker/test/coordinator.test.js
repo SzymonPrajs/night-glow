@@ -7,8 +7,7 @@ const root = new URL('../../../', import.meta.url)
 const loadJson = async (path) => JSON.parse(await readFile(new URL(path, root), 'utf8'))
 const moduleBytes = async (path) => readFile(new URL(path, root))
 
-async function initializedCoordinator() {
-  const coordinator = new Coordinator()
+async function initializedCoordinator(coordinator = new Coordinator()) {
   await coordinator.initialize({
     environmentModuleBytes: await moduleBytes('packages/environment/target/wasm32-unknown-unknown/release/environment_wasm.wasm'),
     physicsModuleBytes: await moduleBytes('packages/physics/target/wasm32-unknown-unknown/release/nightglow_wasm.wasm'),
@@ -146,4 +145,43 @@ test('repeated scenarios reuse bounded Wasm memory', async () => {
     await coordinator.commitScenario(await fixtureRequest(revision))
   }
   assert.equal(coordinator.diagnostics().memoryBytes, settledMemory)
+})
+
+test('dispose cancels pending work and makes the runtime unreachable', async () => {
+  let resume
+  const coordinator = await initializedCoordinator(new Coordinator({
+    yieldControl: () => new Promise((resolve) => { resume = resolve }),
+  }))
+  const pending = coordinator.commitScenario(await fixtureRequest())
+  coordinator.dispose()
+  resume()
+  await assert.rejects(
+    pending,
+    (error) => error instanceof CoordinatorError && error.category === 'cancelled',
+  )
+  assert.throws(
+    () => coordinator.diagnostics(),
+    (error) => error instanceof CoordinatorError && error.category === 'runtime_failure',
+  )
+})
+
+test('module-worker adapter acknowledges runtime disposal', async () => {
+  let messageHandler
+  const posted = []
+  globalThis.self = {
+    addEventListener(type, handler) {
+      assert.equal(type, 'message')
+      messageHandler = handler
+    },
+    postMessage(message) {
+      posted.push(message)
+    },
+  }
+  try {
+    await import(`../src/coordinator.worker.js?dispose-test=${Date.now()}`)
+    await messageHandler({ data: { type: 'dispose' } })
+    assert.deepEqual(posted, [{ type: 'disposed' }])
+  } finally {
+    delete globalThis.self
+  }
 })

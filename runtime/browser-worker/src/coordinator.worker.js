@@ -10,6 +10,9 @@ self.addEventListener('message', async (event) => {
       self.postMessage({ type: 'initialized', ...capabilities })
     } else if (message.type === 'cancel') {
       coordinator.cancel(message.requestId)
+    } else if (message.type === 'dispose') {
+      coordinator.dispose()
+      self.postMessage({ type: 'disposed' })
     } else if (message.type === 'commit-scenario') {
       const product = await coordinator.commitScenario(message.request, (progress) => self.postMessage(progress))
       self.postMessage(product, [product.values.buffer])
