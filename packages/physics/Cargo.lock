@@ -54,6 +54,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "nightglow-precompute"
+version = "0.1.0"
+dependencies = [
+ "nightglow-core",
+ "nightglow-data",
+ "nightglow-solver",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "nightglow-solver"
 version = "0.1.0"
 dependencies = [

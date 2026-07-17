@@ -1,6 +1,18 @@
 # Native precompute application
 
-This future Rust CLI performs expensive, global, deterministic work that does not belong in a browser.
+This Rust CLI is the native orchestration boundary for expensive, global,
+deterministic work that does not belong in a browser. Its first bounded command
+is implemented:
+
+```sh
+cargo run --manifest-path packages/physics/Cargo.toml \
+  -p nightglow-precompute -- fixture-report
+```
+
+It decodes the committed Physics assets, consumes the independent Environment
+contract products through the Physics adapter, runs the shared solver, and emits
+a deterministic JSON summary. It performs no network access, provider ingest,
+global precompute, or production publication.
 
 ## Responsibilities
 
@@ -16,7 +28,7 @@ This future Rust CLI performs expensive, global, deterministic work that does no
 - optionally build Physics-specific source-projection and atmosphere-optics/transfer accelerators keyed by the independent releases, canonical selection/run/time/sample/scenario identities, interpolation/downscaling, atmospheric-optics, spectral-projection, geometry and Physics model revisions;
 - emit immutable content-addressed runtime assets and a full provenance report.
 
-## Proposed commands
+## Future commands
 
 ```text
 nightglow-precompute inspect <input-manifest>
@@ -25,7 +37,8 @@ nightglow-precompute validate <output-manifest>
 nightglow-precompute report <output-manifest>
 ```
 
-The exact CLI is a design placeholder. Network downloading should be a separately auditable step or explicit subcommand, never an invisible side effect of a scientific build.
+Network downloading remains a separately auditable future step or explicit
+subcommand, never an invisible side effect of a scientific build.
 
 ## Publication rule
 

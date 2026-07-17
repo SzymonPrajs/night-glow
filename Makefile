@@ -116,6 +116,7 @@ rust-wasm: ## Compile every implemented Rust Wasm binding.
 native-probe: ## Run the bounded native Environment and Physics conformance probes.
 	@cargo run --release --manifest-path packages/environment/Cargo.toml -p environment-precompute -- fixture-report
 	@cargo run --release --manifest-path packages/environment/Cargo.toml -p environment-conformance
+	@cargo run --release --manifest-path packages/physics/Cargo.toml -p nightglow-precompute -- fixture-report
 	@cargo run --release --manifest-path packages/physics/Cargo.toml -p nightglow-validation
 
 wasm-probe: rust-wasm ## Measure the first native/Wasm parity and memory boundary.

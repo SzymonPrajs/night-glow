@@ -4,7 +4,8 @@ This folder contains the reviewed architecture plus the first bounded Rust
 vertical slice: typed scenarios and products, an independent Environment fixture
 adapter, a Physics-owned terrain product and response manifest, minimal boundary
 source/optical-state construction, an analytic single-scatter response, native
-validation, and a thin raw Wasm export. It is not yet the production solver.
+validation, a deterministic native fixture-precompute report, and a thin raw
+Wasm export. It is not yet the production solver.
 
 The central rule is simple:
 

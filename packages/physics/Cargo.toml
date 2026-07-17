@@ -8,6 +8,7 @@ members = [
   "crates/nightglow-physics",
   "crates/nightglow-solver",
   "crates/nightglow-validation",
+  "apps/precompute",
   "bindings/wasm",
 ]
 
