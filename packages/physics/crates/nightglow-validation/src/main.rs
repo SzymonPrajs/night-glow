@@ -4,6 +4,7 @@ use nightglow_physics::{
     exponential_optical_depth, exponential_optical_depth_trapezoid, homogeneous_single_scatter,
 };
 use nightglow_solver::{CancellationToken, solve_scenario};
+use nightglow_validation::compare_libradtran_pure_absorption;
 use serde::Deserialize;
 use std::time::Instant;
 
@@ -20,6 +21,10 @@ fn main() {
     let coarse_error = relative_error(coarse, exact);
     let fine_error = relative_error(fine, exact);
     let single_scatter = homogeneous_single_scatter(2.0, OpticalDepth(exact), 0.9, 0.1);
+    let libradtran = compare_libradtran_pure_absorption(include_str!(
+        "../../../fixtures/v1/libradtran-pure-absorption.json"
+    ))
+    .expect("libRadtran reference fixture should conform");
 
     let environment = decode_environment_products(
         include_str!("../../../../contracts/fixtures/v1/emission-release.json"),
@@ -57,6 +62,7 @@ fn main() {
     assert!(fine_error < 1.0e-6);
     assert!(fine_error < coarse_error);
     assert!(single_scatter.is_finite() && single_scatter > 0.0 && single_scatter < 2.0);
+    assert!(libradtran.within_tolerance);
     assert_eq!(render.scenario_revision, expected.scenario_revision);
     assert_eq!(render.values.len(), expected.values.len());
     assert!(render_error < 1.0e-6);
@@ -68,6 +74,8 @@ fn main() {
             "  \"coarse_relative_error\": {:.12e},\n",
             "  \"fine_relative_error\": {:.12e},\n",
             "  \"single_scatter_radiance\": {:.12},\n",
+            "  \"libradtran_reference_cases\": {},\n",
+            "  \"libradtran_max_relative_error\": {:.12e},\n",
             "  \"probe_elapsed_microseconds\": {},\n",
             "  \"environment_directional_intensity_w_sr\": {:.1},\n",
             "  \"environment_mean_surface_pressure_pa\": {:.1},\n",
@@ -79,6 +87,8 @@ fn main() {
         coarse_error,
         fine_error,
         single_scatter,
+        libradtran.case_count,
+        libradtran.max_relative_error,
         elapsed.as_micros(),
         environment.directional_intensity_w_sr.iter().sum::<f64>(),
         environment.mean_surface_pressure_pa,

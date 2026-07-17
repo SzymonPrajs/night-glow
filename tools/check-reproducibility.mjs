@@ -27,4 +27,18 @@ assert.equal(contractManifest.license, 'CC0-1.0')
 const terrain = await load('packages/physics/fixtures/v1/surface-terrain-product.json')
 assert.equal(terrain.content_license, 'CC0-1.0')
 
+const referenceTransfer = await load('packages/physics/fixtures/v1/libradtran-pure-absorption.json')
+const referenceDirectory = 'packages/physics/fixtures/reference/libradtran-2.0.6-pure-absorption-v1'
+const referenceArtifacts = {
+  reference_absorption_sha256: 'reference-absorption.dat',
+  reference_scattering_sha256: 'reference-scattering.dat',
+  reference_sza_0_sha256: 'reference-sza-0.inp',
+  reference_sza_30_sha256: 'reference-sza-30.inp',
+  reference_sza_45_sha256: 'reference-sza-45.inp',
+  reference_output_sha256: 'reference-output.txt',
+}
+for (const [key, filename] of Object.entries(referenceArtifacts)) {
+  assert.equal(await hash(`${referenceDirectory}/${filename}`), referenceTransfer.artifacts[key], filename)
+}
+
 console.log(`Reproducibility: ${Object.keys(build.sha256).length} pinned inputs and ${licenses.assets.length} licensed assets verified.`)

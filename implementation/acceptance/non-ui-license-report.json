@@ -49,6 +49,14 @@
       "limitation": "Retained for validation provenance; production redistribution policy remains open."
     },
     {
+      "path": "packages/physics/fixtures/v1/libradtran-pure-absorption.json",
+      "license": "CC0-1.0 generated fixture",
+      "redistribution_status": "redistributable",
+      "source": "libRadtran 2.0.6-MYSTIC DISORT",
+      "sha256": "d7f976d9077c50180bab1c39d741a5f65f1d6d8ebcf36db7eaf9df20bf34e0c0",
+      "limitation": "The project-authored inputs and generated numeric output are CC0; the GPL-2.0-or-later solver source and binaries are not redistributed."
+    },
+    {
       "path": "packages/environment/fixtures/v1/black-marble-vnp46a2-extract.json",
       "license": "CC0-1.0 synthetic fixture",
       "redistribution_status": "redistributable",

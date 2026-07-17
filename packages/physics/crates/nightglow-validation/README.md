@@ -5,8 +5,12 @@ Scientific and numerical evidence for the toolkit. Validation is not limited to 
 The current executable independently decodes the language-neutral Environment
 fixtures, resolves the complete scenario and terrain/data manifests, publishes
 the coherent product, compares all 24 `f32` values with the contract fixture,
-and reports convergence against the analytic exponential column. JPL vector and
-browser evidence remain in the reference-viewer/tooling harness.
+reports convergence against the analytic exponential column, and compares
+projected direct-beam transmission with three independently executed libRadtran
+2.0.6 DISORT cases. The libRadtran fixture is deliberately limited to a
+non-scattering plane-parallel slab; curved-Earth and scattering comparisons
+remain open. JPL vector and browser evidence remain in the
+reference-viewer/tooling harness.
 
 ## Proposed modules
 

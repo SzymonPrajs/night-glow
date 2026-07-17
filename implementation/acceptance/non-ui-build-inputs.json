@@ -14,6 +14,7 @@
     "packages/physics/fixtures/jpl-horizons-v1.json": "98327dadae2008c4d4267159b73adeaa071abe3a134d3ab9a203f66a79af46c0",
     "packages/physics/fixtures/v1/physics-data-manifest.json": "feba9d6b8743fd06e9d16eab396f0f07d68d0ca210bb9331c66b618c624f794c",
     "packages/physics/fixtures/v1/surface-terrain-product.json": "d6f2ea2ba913e5434ddc81ff2eb14631cd3712d011a433d10903cae5473b9579",
+    "packages/physics/fixtures/v1/libradtran-pure-absorption.json": "d7f976d9077c50180bab1c39d741a5f65f1d6d8ebcf36db7eaf9df20bf34e0c0",
     "packages/environment/fixtures/v1/black-marble-vnp46a2-extract.json": "2a41b1f8c30d7e407ddb98807d60f114b023edfe989c9162d1bd5381849edf99",
     "packages/environment/fixtures/v1/atmosphere-provider-extracts.json": "105e413603e4d52f901a428fedf45598e95a2137d58789dcc3bb52c55902bccc"
   }

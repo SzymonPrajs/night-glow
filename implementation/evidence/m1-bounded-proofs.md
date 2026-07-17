@@ -12,7 +12,8 @@ noted otherwise.
 | Environment contract slice | `cargo test --manifest-path packages/environment/Cargo.toml` and `make native-probe` | 17 tests pass; typed identities/time/evidence, independent release decoders, extracted provider metadata normalization and contiguous queries recover 70 W sr^-1 and 99,850 Pa |
 | Black Marble C2 normalization fixture | `cargo test --manifest-path packages/environment/Cargo.toml -p emission-ingest-black-marble` | metadata, fill, all mandatory QA states, snow, cloud-mask bits, direct/gap-filled separation, and unit/scale corruption pass against an invented CC0 extraction |
 | atmosphere provider normalization fixture | `cargo test --manifest-path packages/environment/Cargo.toml -p atmosphere-ingest` | ERA5, CAMS and MERRA-2 extracted-variable metadata, missingness, explicit unit conversions, vertical coordinates and wet/dry aerosol basis pass against an invented CC0 extraction |
-| native reference kernel | `cargo run --release --manifest-path packages/physics/Cargo.toml -p nightglow-validation` | fine exponential-column integration error `2.793967610559e-7`; positive bounded single-scatter case; 24–35 µs across final local runs |
+| native reference kernel | `cargo run --release --manifest-path packages/physics/Cargo.toml -p nightglow-validation` | fine exponential-column integration error `2.793967610559e-7`; positive bounded single-scatter case; 3 libRadtran DISORT pure-absorption cases agree within `6.6423e-8`; 19 µs on the recorded local run |
+| libRadtran reference fixture | official libRadtran 2.0.6 source archive plus committed reproduction inputs | source archive SHA-256 `64930cc4…d69840`; projected direct-beam transmittance at solar zenith 0°, 30° and 45° is preserved with exact solver/version/quantity/licence identities |
 | astronomy reference | `npm --prefix apps/reference-viewer run test:astronomy` | Sun/Moon/Mars against JPL Horizons: worst angular error `3.2063` arcsec and distance relative error `1.0437e-4` |
 | native/Wasm boundary | `make wasm-probe` | Environment/Physics modules are 25,565/206,285 bytes, each starts at 1,114,112 bytes, scalar JS/Wasm drift is 0, and coherent-product relative error is `4.0944e-8` |
 | non-UI coordinator | `make coordinator-test` | 5 tests pass against both Wasm modules: coherent product, cancellation, stale revision, unit drift, and resource budget |
@@ -42,8 +43,10 @@ noted otherwise.
   semantics, unit rejection and provenance preservation—not variable
   availability, provider file decoding, licence compatibility or physical
   fidelity.
-- The native transfer proof is an analytic exponential/homogeneous case, not yet
-  the planned curved-Earth vertically varying comparison against libRadtran.
+- The native transfer proof now includes a real libRadtran DISORT comparison,
+  but only for plane-parallel pure absorption. Curved-Earth vertically varying
+  radiance, diffuse scattering, aerosols, clouds, surfaces and multiple
+  scattering remain unvalidated against an external solver.
 - Vercel deployment, range/MIME/cache headers and cross-origin profiles were not
   tested because this checkout has no authenticated Vercel CLI.
 - The custom globe layer proves lifecycle and route isolation, not projection

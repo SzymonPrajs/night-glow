@@ -1,0 +1,42 @@
+{
+  "fixture_revision": "libradtran-pure-absorption-v1",
+  "generated_output_license": "CC0-1.0",
+  "solver": {
+    "name": "libRadtran",
+    "version": "2.0.6-MYSTIC",
+    "rte_solver": "disort",
+    "source_archive_url": "https://www.libradtran.org/download/libRadtran-2.0.6.tar.gz",
+    "source_archive_sha256": "64930cc40b6e4a37aa220520974d330fc1563796f466a649b2238131f2d69840",
+    "source_license": "GPL-2.0-or-later"
+  },
+  "artifacts": {
+    "reference_absorption_sha256": "3bf68b86f180b62a5878e055c27b0af9c2eeb259970ac40be913cfe3e3c6a13e",
+    "reference_scattering_sha256": "773ec0d6fd260cbe2203f4705c22c05a64e5e91de9bf0d5fd9c7c9dc04fb9e81",
+    "reference_sza_0_sha256": "cf9d61bc87d2a0226444fb9dc88f3a3528ee6fb59a06fd90f881d2244d547201",
+    "reference_sza_30_sha256": "a1f8f4ab1d3fb401219577f466ea1936011cd58b85c8ae9106d34b79b649cebb",
+    "reference_sza_45_sha256": "86b3342f925b35e5cc045e5b9419dbee791c36a2b8a64eb2676d483a7a1a99dd",
+    "reference_output_sha256": "fac4188d81ff707706f7e4c771bce029ad7fbb1abe488d448d788594cb1d974d"
+  },
+  "quantity": "projected-direct-beam-transmittance",
+  "unit": "1",
+  "wavelength_nm": 550.0,
+  "vertical_absorption_optical_depth": 0.5,
+  "relative_tolerance": 0.000001,
+  "cases": [
+    {
+      "case_id": "solar-zenith-0-deg",
+      "solar_zenith_deg": 0.0,
+      "reference_value": 0.6065307
+    },
+    {
+      "case_id": "solar-zenith-30-deg",
+      "solar_zenith_deg": 30.0,
+      "reference_value": 0.4861727
+    },
+    {
+      "case_id": "solar-zenith-45-deg",
+      "solar_zenith_deg": 45.0,
+      "reference_value": 0.3486522
+    }
+  ]
+}
