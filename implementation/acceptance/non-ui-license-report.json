@@ -54,6 +54,13 @@
       "redistribution_status": "redistributable",
       "sha256": "2a41b1f8c30d7e407ddb98807d60f114b023edfe989c9162d1bd5381849edf99",
       "limitation": "Contains provider metadata meanings and invented values, not NASA science pixels."
+    },
+    {
+      "path": "packages/environment/fixtures/v1/atmosphere-provider-extracts.json",
+      "license": "CC0-1.0 synthetic fixture",
+      "redistribution_status": "redistributable",
+      "sha256": "105e413603e4d52f901a428fedf45598e95a2137d58789dcc3bb52c55902bccc",
+      "limitation": "Contains invented ERA5, CAMS and MERRA-2 extraction metadata and values, not provider data bytes."
     }
   ]
 }

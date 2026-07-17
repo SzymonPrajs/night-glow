@@ -11,6 +11,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "atmosphere-ingest"
+version = "0.1.0"
+dependencies = [
+ "environment-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "atmosphere-schema"
 version = "0.1.0"
 dependencies = [

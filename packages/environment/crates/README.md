@@ -4,8 +4,9 @@ The first contract slice implements typed immutable IDs/UTC instants, closed
 validity/evidence/selection enums, stable error categories, shared validation, independent emission and
 atmosphere schemas, contiguous regional query products, an optional compatibility
 manifest, a native conformance executable, and a thin Wasm buffer adapter.
-Provider ingestion and calibrated fusion remain gated by the emission and
-atmosphere feasibility experiments. Shared infrastructure and the two independent domain families are described in
+The first extracted-metadata adapters are synthetic fixtures; provider access,
+file decoding and calibrated fusion remain gated by the emission and atmosphere
+feasibility experiments. Shared infrastructure and the two independent domain families are described in
 [the environment architecture](../docs/architecture/workspace.md).
 
 The intended boundary is shared units/provenance/manifest infrastructure, not shared scientific records. Emission and atmospheric releases must remain independently buildable, versioned, testable and consumable.
@@ -15,7 +16,8 @@ The intended boundary is shared units/provenance/manifest infrastructure, not sh
 These names are authoritative. The first-slice implementation currently includes
 `environment-core`, `environment-manifest`, `emission-schema`, `emission-core`,
 `emission-ingest-black-marble` (extracted synthetic metadata fixture only),
-`atmosphere-schema`, `atmosphere-format`, and `environment-conformance`; the
+`atmosphere-schema`, `atmosphere-ingest` (extracted synthetic metadata fixture
+only), `atmosphere-format`, and `environment-conformance`; the
 remaining domain packages are planned:
 
 | Package | Responsibility |
