@@ -9,7 +9,8 @@ noted otherwise.
 | Proof | Executed evidence | Result |
 | --- | --- | --- |
 | fixture quantities and identities | `make contract-check` | SHA-256 identities, cross-release IDs, 70 W sr^-1 exact support integration, atmosphere axes/pressure ordering and render lengths pass |
-| Environment contract slice | `cargo test --manifest-path packages/environment/Cargo.toml` and `make native-probe` | 11 tests pass; typed identities/time/evidence, independent release decoders and contiguous queries recover 70 W sr^-1 and 99,850 Pa |
+| Environment contract slice | `cargo test --manifest-path packages/environment/Cargo.toml` and `make native-probe` | 14 tests pass; typed identities/time/evidence, independent release decoders, Black Marble metadata normalization and contiguous queries recover 70 W sr^-1 and 99,850 Pa |
+| Black Marble C2 normalization fixture | `cargo test --manifest-path packages/environment/Cargo.toml -p emission-ingest-black-marble` | metadata, fill, all mandatory QA states, snow, cloud-mask bits, direct/gap-filled separation, and unit/scale corruption pass against an invented CC0 extraction |
 | native reference kernel | `cargo run --release --manifest-path packages/physics/Cargo.toml -p nightglow-validation` | fine exponential-column integration error `2.793967610559e-7`; positive bounded single-scatter case; 24–35 µs across final local runs |
 | astronomy reference | `npm --prefix apps/reference-viewer run test:astronomy` | Sun/Moon/Mars against JPL Horizons: worst angular error `3.2063` arcsec and distance relative error `1.0437e-4` |
 | native/Wasm boundary | `make wasm-probe` | Environment/Physics modules are 25,565/206,285 bytes, each starts at 1,114,112 bytes, scalar JS/Wasm drift is 0, and coherent-product relative error is `4.0944e-8` |
@@ -32,8 +33,9 @@ noted otherwise.
 
 ## Still open; not claimed as passed
 
-- No real Black Marble feasibility subset has been ingested, so provider SDS,
-  QA/fill semantics, normalization and redistribution remain open.
+- No real Black Marble feasibility subset has been ingested. The Collection 2
+  metadata/QA normalizer now has a synthetic extraction, but actual HDF5 bytes,
+  geolocation, provider-value comparison, access and redistribution remain open.
 - No credentialed ERA5/CAMS/MERRA-2 subset has been retrieved, so the synthetic
   atmosphere fixture proves encoding semantics only, not variable availability,
   licence compatibility or physical fidelity.

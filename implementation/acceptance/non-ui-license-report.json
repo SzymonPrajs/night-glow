@@ -47,6 +47,13 @@
       "source": "NASA/JPL Horizons API 1.3",
       "sha256": "98327dadae2008c4d4267159b73adeaa071abe3a134d3ab9a203f66a79af46c0",
       "limitation": "Retained for validation provenance; production redistribution policy remains open."
+    },
+    {
+      "path": "packages/environment/fixtures/v1/black-marble-vnp46a2-extract.json",
+      "license": "CC0-1.0 synthetic fixture",
+      "redistribution_status": "redistributable",
+      "sha256": "2a41b1f8c30d7e407ddb98807d60f114b023edfe989c9162d1bd5381849edf99",
+      "limitation": "Contains provider metadata meanings and invented values, not NASA science pixels."
     }
   ]
 }

@@ -26,7 +26,7 @@ The committed dependency identities are:
 | Boundary | Command | Result |
 | --- | --- | --- |
 | contract and schema descriptors | `make contract-check` | JSON Schema declarations, SHA-256 fixture identities, cross-product IDs, units, axes, conservation, terrain and buffer lengths pass |
-| Environment native boundary | `cargo test --manifest-path packages/environment/Cargo.toml` | 11 tests pass across typed identity/time/evidence primitives, schema, query, validation and Wasm-adapter crates |
+| Environment native boundary | `cargo test --manifest-path packages/environment/Cargo.toml` | 14 tests pass across typed identity/time/evidence primitives, schema, query, synthetic Black Marble metadata normalization, validation and Wasm-adapter crates |
 | Environment conformance | `cargo run --release --manifest-path packages/environment/Cargo.toml -p environment-conformance` | 4 emission cells conserve 70 W sr^-1; queried atmosphere shape is 2×2×3 with mean surface pressure 99,850 Pa |
 | Physics native boundary | `cargo test --manifest-path packages/physics/Cargo.toml` | 14 tests pass across typed scenarios/errors, astronomy, data, the independent Environment adapter, transfer functions, DAG scheduling/cancellation and Wasm output |
 | Physics reference solve | `cargo run --release --manifest-path packages/physics/Cargo.toml -p nightglow-validation` | 24 coherent `f32` values match the language-neutral fixture with maximum relative error `4.094373956018e-8`; fine integration error is `2.793967610559e-7` |

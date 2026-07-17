@@ -28,6 +28,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "emission-ingest-black-marble"
+version = "0.1.0"
+dependencies = [
+ "environment-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "emission-schema"
 version = "0.1.0"
 dependencies = [

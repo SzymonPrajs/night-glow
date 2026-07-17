@@ -14,6 +14,7 @@ The intended boundary is shared units/provenance/manifest infrastructure, not sh
 
 These names are authoritative. The first-slice implementation currently includes
 `environment-core`, `environment-manifest`, `emission-schema`, `emission-core`,
+`emission-ingest-black-marble` (extracted synthetic metadata fixture only),
 `atmosphere-schema`, `atmosphere-format`, and `environment-conformance`; the
 remaining domain packages are planned:
 

@@ -5,6 +5,7 @@ members = [
   "crates/environment-manifest",
   "crates/emission-schema",
   "crates/emission-core",
+  "crates/emission-ingest-black-marble",
   "crates/atmosphere-schema",
   "crates/atmosphere-format",
   "crates/environment-conformance",
