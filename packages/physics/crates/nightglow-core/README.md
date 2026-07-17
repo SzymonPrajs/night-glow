@@ -2,7 +2,8 @@
 
 Shared language for all calculations. This crate should be small, stable, and free of domain algorithms.
 
-The first implementation contains the scalar quantity newtypes used by the M1
+The first implementation contains validated immutable IDs and UTC instants,
+closed validity/uncertainty states, stable error categories, the scalar quantity newtypes used by the M1
 reference proof plus the frozen `ObserverScenario`, `PhysicsDataManifest`,
 `SurfaceTerrainProduct`, Environment-input, boundary-source, optical-state, and
 coherent render-product types needed by the synthetic vertical slice. Physical

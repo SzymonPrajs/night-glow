@@ -1,6 +1,7 @@
 # Environment Rust crates
 
-The first contract slice implements shared validation, independent emission and
+The first contract slice implements typed immutable IDs/UTC instants, closed
+validity/evidence/selection enums, stable error categories, shared validation, independent emission and
 atmosphere schemas, contiguous regional query products, an optional compatibility
 manifest, a native conformance executable, and a thin Wasm buffer adapter.
 Provider ingestion and calibrated fusion remain gated by the emission and

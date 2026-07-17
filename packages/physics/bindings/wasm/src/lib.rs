@@ -1,6 +1,8 @@
 //! Thin C-compatible exports for the first native/Wasm parity proof.
 
-use nightglow_core::{EnvironmentInputs, ExtinctionPerMetre, ObserverScenario, PathLengthMetres};
+use nightglow_core::{
+    EnvironmentInputs, ExtinctionPerMetre, ObserverScenario, PathLengthMetres, StableId, UtcInstant,
+};
 use nightglow_data::decode_physics_assets;
 use nightglow_physics::{exponential_optical_depth_trapezoid, transmittance};
 use nightglow_solver::{CancellationToken, solve_scenario};
@@ -48,9 +50,9 @@ pub extern "C" fn nightglow_first_slice_solve(
         include_str!("../../../fixtures/v1/surface-terrain-product.json"),
     );
     let environment = EnvironmentInputs {
-        emission_release_id: "emission:fixture:central-poland-2x2:v1".to_owned(),
-        atmosphere_release_id: "atmosphere:fixture:central-poland-2x2x3:v1".to_owned(),
-        atmosphere_valid_time_utc: "2024-01-15T00:00:00Z".to_owned(),
+        emission_release_id: StableId::new("emission:fixture:central-poland-2x2:v1").unwrap(),
+        atmosphere_release_id: StableId::new("atmosphere:fixture:central-poland-2x2x3:v1").unwrap(),
+        atmosphere_valid_time_utc: UtcInstant::new("2024-01-15T00:00:00Z").unwrap(),
         directional_intensity_w_sr: vec![total_directional_intensity_w_sr],
         mean_surface_pressure_pa,
     };

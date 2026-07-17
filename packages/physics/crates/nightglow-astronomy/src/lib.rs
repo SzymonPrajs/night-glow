@@ -25,6 +25,7 @@ pub fn resolve_time_state(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nightglow_core::StableId;
 
     const SCENARIO: &str = include_str!("../../../../contracts/fixtures/v1/observer-scenario.json");
 
@@ -39,7 +40,7 @@ mod tests {
     #[test]
     fn rejects_unpinned_earth_orientation_data() {
         let mut scenario = ObserverScenario::from_json(SCENARIO).unwrap();
-        scenario.astronomy_time_data_ids.earth_orientation = "latest".to_owned();
+        scenario.astronomy_time_data_ids.earth_orientation = StableId::new("latest").unwrap();
         assert_eq!(
             resolve_time_state(&scenario),
             Err(PhysicsError::IncompatibleSemantics)

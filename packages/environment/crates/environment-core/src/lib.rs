@@ -2,7 +2,113 @@
 //!
 //! This crate contains no provider ingestion and no light propagation.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+use std::{fmt, str::FromStr};
+
+/// Validated immutable product, model, schema, or policy identity.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(transparent)]
+pub struct StableId(String);
+
+impl StableId {
+    pub fn new(value: impl Into<String>) -> Result<Self, EnvironmentError> {
+        let value = value.into();
+        if value.is_empty()
+            || value.len() > 256
+            || !value
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || b":-._".contains(&byte))
+        {
+            return Err(EnvironmentError::InvalidIdentifier);
+        }
+        Ok(Self(value))
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for StableId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
+impl FromStr for StableId {
+    type Err = EnvironmentError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::new(value)
+    }
+}
+
+impl<'de> Deserialize<'de> for StableId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::new(value).map_err(serde::de::Error::custom)
+    }
+}
+
+impl PartialEq<&str> for StableId {
+    fn eq(&self, other: &&str) -> bool {
+        self.0 == *other
+    }
+}
+
+/// Pinned RFC3339 UTC instant used at immutable product boundaries.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(transparent)]
+pub struct UtcInstant(String);
+
+impl UtcInstant {
+    pub fn new(value: impl Into<String>) -> Result<Self, EnvironmentError> {
+        let value = value.into();
+        let bytes = value.as_bytes();
+        if bytes.len() < 20
+            || !value.ends_with('Z')
+            || bytes.get(4) != Some(&b'-')
+            || bytes.get(7) != Some(&b'-')
+            || bytes.get(10) != Some(&b'T')
+            || bytes.get(13) != Some(&b':')
+            || bytes.get(16) != Some(&b':')
+        {
+            return Err(EnvironmentError::InvalidTime);
+        }
+        Ok(Self(value))
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for UtcInstant {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
+impl<'de> Deserialize<'de> for UtcInstant {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::new(value).map_err(serde::de::Error::custom)
+    }
+}
+
+impl PartialEq<&str> for UtcInstant {
+    fn eq(&self, other: &&str) -> bool {
+        self.0 == *other
+    }
+}
 
 /// A corrected-reference-view DNB directional radiance in nW cm^-2 sr^-1.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -34,6 +140,34 @@ pub enum DataValidity {
     Masked,
     Censored,
     NotCovered,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceEvidenceClass {
+    DirectObservation,
+    AssimilatedAnalysis,
+    Forecast,
+    Reanalysis,
+    RegionalEnrichment,
+    ObservationCorrection,
+    SeasonalAnomaly,
+    Climatology,
+    InferredPrior,
+    ExplicitStandard,
+    Missing,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AtmosphereSelectionMode {
+    ObservationAdjustedAnalysis,
+    Analysis,
+    Forecast,
+    Reanalysis,
+    ClimatologySample,
+    StandardScenario,
+    Insufficient,
 }
 
 /// WGS84 geodetic bounds used by regional Environment queries.
@@ -88,8 +222,34 @@ pub enum EnvironmentError {
     InvalidCoordinates,
     InvalidShape,
     InvalidValue,
+    InvalidIdentifier,
+    InvalidTime,
     DuplicateIdentifier,
     EmptyQuery,
+}
+
+impl EnvironmentError {
+    #[must_use]
+    pub const fn category(self) -> &'static str {
+        match self {
+            Self::IncompatibleSchema => "incompatible_schema",
+            Self::IncompatibleSemantics => "incompatible_semantics",
+            Self::InvalidUnits => "invalid_units",
+            Self::InvalidCoordinates => "invalid_coordinates",
+            Self::InvalidShape => "invalid_shape",
+            Self::InvalidValue => "invalid_value",
+            Self::InvalidIdentifier => "invalid_identifier",
+            Self::InvalidTime => "invalid_time",
+            Self::DuplicateIdentifier => "duplicate_identifier",
+            Self::EmptyQuery => "empty_query",
+        }
+    }
+}
+
+impl fmt::Display for EnvironmentError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.category())
+    }
 }
 
 /// Errors found while validating a height-pressure column.
@@ -169,6 +329,26 @@ mod tests {
         assert_eq!(
             validate_height_pressure_column(&[100.0, 1_100.0], &[90_000.0, 90_000.0]),
             Err(ColumnError::NonDecreasingPressure)
+        );
+    }
+
+    #[test]
+    fn identities_and_utc_instants_reject_ambient_or_malformed_values() {
+        assert_eq!(
+            StableId::new("emission:fixture:v1").unwrap(),
+            "emission:fixture:v1"
+        );
+        assert_eq!(
+            StableId::new("contains spaces"),
+            Err(EnvironmentError::InvalidIdentifier)
+        );
+        assert_eq!(
+            UtcInstant::new("2024-01-15T00:00:00Z").unwrap(),
+            "2024-01-15T00:00:00Z"
+        );
+        assert_eq!(
+            UtcInstant::new("latest"),
+            Err(EnvironmentError::InvalidTime)
         );
     }
 }

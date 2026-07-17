@@ -1,15 +1,18 @@
 //! Regional contiguous queries over validated atmosphere releases.
 
 use atmosphere_schema::AtmosphereFieldRelease;
-use environment_core::{EnvironmentError, Wgs84Bounds};
+use environment_core::{
+    AtmosphereSelectionMode, EnvironmentError, SourceEvidenceClass, StableId, UtcInstant,
+    Wgs84Bounds,
+};
 use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct AtmosphereStateVolume {
-    pub atmosphere_release_id: String,
-    pub source_run_id: String,
-    pub selection_mode: String,
-    pub valid_time_utc: String,
+    pub atmosphere_release_id: StableId,
+    pub source_run_id: StableId,
+    pub selection_mode: AtmosphereSelectionMode,
+    pub valid_time_utc: UtcInstant,
     pub longitude_deg_east: Vec<f64>,
     pub latitude_deg_north: Vec<f64>,
     pub geometric_height_m: Vec<f64>,
@@ -21,7 +24,7 @@ pub struct AtmosphereStateVolume {
 pub struct StateVariable {
     pub unit: String,
     pub wet_dry_basis: String,
-    pub evidence: String,
+    pub evidence: SourceEvidenceClass,
     pub values: Vec<f64>,
 }
 

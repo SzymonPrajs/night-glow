@@ -9,10 +9,10 @@ noted otherwise.
 | Proof | Executed evidence | Result |
 | --- | --- | --- |
 | fixture quantities and identities | `make contract-check` | SHA-256 identities, cross-release IDs, 70 W sr^-1 exact support integration, atmosphere axes/pressure ordering and render lengths pass |
-| Environment contract slice | `cargo test --manifest-path packages/environment/Cargo.toml` and `make native-probe` | 10 tests pass; independent release decoders and contiguous queries recover 70 W sr^-1 and 99,850 Pa |
+| Environment contract slice | `cargo test --manifest-path packages/environment/Cargo.toml` and `make native-probe` | 11 tests pass; typed identities/time/evidence, independent release decoders and contiguous queries recover 70 W sr^-1 and 99,850 Pa |
 | native reference kernel | `cargo run --release --manifest-path packages/physics/Cargo.toml -p nightglow-validation` | fine exponential-column integration error `2.793967610559e-7`; positive bounded single-scatter case; 24–35 µs across final local runs |
 | astronomy reference | `npm --prefix apps/reference-viewer run test:astronomy` | Sun/Moon/Mars against JPL Horizons: worst angular error `3.2063` arcsec and distance relative error `1.0437e-4` |
-| native/Wasm boundary | `make wasm-probe` | Environment/Physics modules are 25,565/192,332 bytes, each starts at 1,114,112 bytes, scalar JS/Wasm drift is 0, and coherent-product relative error is `4.0944e-8` |
+| native/Wasm boundary | `make wasm-probe` | Environment/Physics modules are 25,565/206,285 bytes, each starts at 1,114,112 bytes, scalar JS/Wasm drift is 0, and coherent-product relative error is `4.0944e-8` |
 | non-UI coordinator | `make coordinator-test` | 5 tests pass against both Wasm modules: coherent product, cancellation, stale revision, unit drift, and resource budget |
 | worker-to-WebGL2 HDR path | `npm --prefix apps/reference-viewer run test:m1-browser` | transferable detached, stale revision cancelled under 100 ms, coherent revision 2 uploaded/read back within `1e-6`, resources disposed |
 | Next/MapLibre/observer runtime | build, audit and `test:m1-runtime` | Next 16.2.10 static routes build; production dependency audit has 0 findings; `/globe` and `/observe` pass with no browser errors |

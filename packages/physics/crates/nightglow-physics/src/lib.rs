@@ -1,10 +1,10 @@
 //! Reviewable physical equations shared by native and Wasm targets.
 
 use nightglow_core::{
-    ArtificialLightBoundarySource, Convergence, EnvironmentInputs, ExtinctionPerMetre,
-    ObserverRenderProduct, ObserverScenario, OpticalAtmosphereState, OpticalDepth,
-    PathLengthMetres, PhysicsDataManifest, PhysicsError, ResolvedAstronomyTime,
-    SurfaceTerrainProduct,
+    ArtificialLightBoundarySource, Convergence, DataValidity, EnvironmentInputs,
+    ExtinctionPerMetre, ObserverRenderProduct, ObserverScenario, OpticalAtmosphereState,
+    OpticalDepth, PathLengthMetres, PhysicsDataManifest, PhysicsError, ResolvedAstronomyTime,
+    StableId, SurfaceTerrainProduct, UncertaintyStatus,
 };
 
 /// Exact optical depth through an exponential vertical extinction profile.
@@ -103,8 +103,8 @@ pub fn solve_first_slice(
         manifest,
     )?;
     Ok(ObserverRenderProduct {
-        observer_render_product_schema_revision: "observer-render-fixture-v1".to_owned(),
-        physics_abi_revision: "physics-abi-fixture-v1".to_owned(),
+        observer_render_product_schema_revision: StableId::new("observer-render-fixture-v1")?,
+        physics_abi_revision: StableId::new("physics-abi-fixture-v1")?,
         physics_model_revision: manifest.physics_model_revision.clone(),
         physics_data_manifest_id: manifest.physics_data_manifest_id.clone(),
         scenario_revision: scenario.scenario_revision,
@@ -120,13 +120,13 @@ pub fn solve_first_slice(
         quantity: "spectral-response-integrated-radiance".to_owned(),
         unit: "W m-2 sr-1".to_owned(),
         values,
-        data_validity: "valid".to_owned(),
+        data_validity: DataValidity::Valid,
         fidelity: "synthetic-contract-only".to_owned(),
         convergence: Convergence {
             status: "converged".to_owned(),
             relative_residual: 0.0,
         },
-        uncertainty_status: "synthetic-not-statistical".to_owned(),
+        uncertainty_status: UncertaintyStatus::SyntheticNotStatistical,
     })
 }
 

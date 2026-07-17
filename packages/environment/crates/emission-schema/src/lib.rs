@@ -1,6 +1,8 @@
 //! Immutable emission-release schema and semantic validation.
 
-use environment_core::{DataValidity, DnbDirectionalRadiance, EnvironmentError, SupportArea};
+use environment_core::{
+    DataValidity, DnbDirectionalRadiance, EnvironmentError, StableId, SupportArea,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -10,9 +12,9 @@ pub const DNB_UNIT: &str = "nW cm-2 sr-1";
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct EmissionRelease {
-    pub emission_schema_revision: String,
-    pub emission_model_revision: String,
-    pub emission_release_id: String,
+    pub emission_schema_revision: StableId,
+    pub emission_model_revision: StableId,
+    pub emission_release_id: StableId,
     pub content_license: String,
     pub quantity: String,
     pub unit: String,
@@ -27,7 +29,7 @@ pub struct EmissionRelease {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct EmissionCell {
-    pub cell_id: String,
+    pub cell_id: StableId,
     pub center_wgs84_deg: [f64; 2],
     pub support_area_m2: f64,
     pub j_dnb_nw_cm2_sr: f64,

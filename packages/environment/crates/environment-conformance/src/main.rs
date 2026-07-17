@@ -2,7 +2,7 @@ use atmosphere_format::query_atmosphere;
 use atmosphere_schema::AtmosphereFieldRelease;
 use emission_core::query_emission;
 use emission_schema::EmissionRelease;
-use environment_core::Wgs84Bounds;
+use environment_core::{StableId, Wgs84Bounds};
 use environment_manifest::EnvironmentReleaseSet;
 
 const EMISSION: &str = include_str!("../../../../contracts/fixtures/v1/emission-release.json");
@@ -12,8 +12,8 @@ fn main() {
     let emission = EmissionRelease::from_json(EMISSION).expect("emission fixture");
     let atmosphere = AtmosphereFieldRelease::from_json(ATMOSPHERE).expect("atmosphere fixture");
     let release_set = EnvironmentReleaseSet {
-        manifest_schema_revision: "environment-manifest-fixture-v1".to_owned(),
-        release_set_id: "environment-set:fixture:central-poland:v1".to_owned(),
+        manifest_schema_revision: StableId::new("environment-manifest-fixture-v1").unwrap(),
+        release_set_id: StableId::new("environment-set:fixture:central-poland:v1").unwrap(),
         emission_release_id: emission.emission_release_id.clone(),
         atmosphere_release_id: atmosphere.atmosphere_release_id.clone(),
     };

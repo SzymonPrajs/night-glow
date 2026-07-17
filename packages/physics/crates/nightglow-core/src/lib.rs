@@ -1,6 +1,102 @@
 //! Shared typed quantities for native and Wasm Physics targets.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+use std::fmt;
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(transparent)]
+pub struct StableId(String);
+
+impl StableId {
+    pub fn new(value: impl Into<String>) -> Result<Self, PhysicsError> {
+        let value = value.into();
+        if value.is_empty()
+            || value.len() > 256
+            || !value
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || b":-._".contains(&byte))
+        {
+            return Err(PhysicsError::InvalidDescriptor);
+        }
+        Ok(Self(value))
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for StableId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
+impl<'de> Deserialize<'de> for StableId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::new(value).map_err(serde::de::Error::custom)
+    }
+}
+
+impl PartialEq<&str> for StableId {
+    fn eq(&self, other: &&str) -> bool {
+        self.0 == *other
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(transparent)]
+pub struct UtcInstant(String);
+
+impl UtcInstant {
+    pub fn new(value: impl Into<String>) -> Result<Self, PhysicsError> {
+        let value = value.into();
+        let bytes = value.as_bytes();
+        if bytes.len() < 20
+            || !value.ends_with('Z')
+            || bytes.get(4) != Some(&b'-')
+            || bytes.get(7) != Some(&b'-')
+            || bytes.get(10) != Some(&b'T')
+            || bytes.get(13) != Some(&b':')
+            || bytes.get(16) != Some(&b':')
+        {
+            return Err(PhysicsError::InvalidUnitsOrCoordinates);
+        }
+        Ok(Self(value))
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for UtcInstant {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
+impl<'de> Deserialize<'de> for UtcInstant {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::new(value).map_err(serde::de::Error::custom)
+    }
+}
+
+impl PartialEq<&str> for UtcInstant {
+    fn eq(&self, other: &&str) -> bool {
+        self.0 == *other
+    }
+}
 
 /// Extinction coefficient in reciprocal metres.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -18,28 +114,28 @@ pub const OBSERVER_PRODUCT_VALUE_COUNT: usize = 24;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct ObserverScenario {
-    pub observer_scenario_schema_revision: String,
+    pub observer_scenario_schema_revision: StableId,
     pub scenario_revision: u64,
     pub observer_wgs84: ObserverLocation,
-    pub requested_time_utc: String,
+    pub requested_time_utc: UtcInstant,
     pub astronomy_time_data_ids: AstronomyTimeDataIds,
-    pub emission_release_id: String,
-    pub emission_time_context: String,
-    pub emission_scenario_policy_id: String,
-    pub atmosphere_release_id: String,
+    pub emission_release_id: StableId,
+    pub emission_time_context: StableId,
+    pub emission_scenario_policy_id: StableId,
+    pub atmosphere_release_id: StableId,
     pub atmosphere_selection: ScenarioAtmosphereSelection,
-    pub physics_model_revision: String,
-    pub physics_data_manifest_id: String,
-    pub atmosphere_optics_model_revision: String,
-    pub surface_terrain_product_id: String,
+    pub physics_model_revision: StableId,
+    pub physics_data_manifest_id: StableId,
+    pub atmosphere_optics_model_revision: StableId,
+    pub surface_terrain_product_id: StableId,
     pub output: ObserverOutputRequest,
     pub resource_budget: ResourceBudget,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct AstronomyTimeDataIds {
-    pub earth_orientation: String,
-    pub leap_seconds: String,
+    pub earth_orientation: StableId,
+    pub leap_seconds: StableId,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -53,10 +149,10 @@ pub struct ObserverLocation {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct ScenarioAtmosphereSelection {
     pub mode: String,
-    pub valid_time_utc: String,
-    pub standard_scenario_id: String,
-    pub interpolation_revision: String,
-    pub downscaling_revision: String,
+    pub valid_time_utc: UtcInstant,
+    pub standard_scenario_id: StableId,
+    pub interpolation_revision: StableId,
+    pub downscaling_revision: StableId,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -98,10 +194,7 @@ impl ObserverScenario {
         {
             return Err(PhysicsError::IncompatibleSemantics);
         }
-        if self.astronomy_time_data_ids.earth_orientation.is_empty()
-            || self.astronomy_time_data_ids.leap_seconds.is_empty()
-            || self.requested_time_utc != self.atmosphere_selection.valid_time_utc
-        {
+        if self.requested_time_utc != self.atmosphere_selection.valid_time_utc {
             return Err(PhysicsError::IncompatibleSemantics);
         }
         Ok(())
@@ -110,18 +203,18 @@ impl ObserverScenario {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ResolvedAstronomyTime {
-    pub requested_time_utc: String,
-    pub earth_orientation_id: String,
-    pub leap_seconds_id: String,
+    pub requested_time_utc: UtcInstant,
+    pub earth_orientation_id: StableId,
+    pub leap_seconds_id: StableId,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct PhysicsDataManifest {
-    pub physics_data_manifest_schema_revision: String,
-    pub physics_data_manifest_id: String,
-    pub physics_model_revision: String,
-    pub response_basis_revision: String,
-    pub surface_terrain_product_id: String,
+    pub physics_data_manifest_schema_revision: StableId,
+    pub physics_data_manifest_id: StableId,
+    pub physics_model_revision: StableId,
+    pub response_basis_revision: StableId,
+    pub surface_terrain_product_id: StableId,
     pub reference_directional_intensity_w_sr: f64,
     pub reference_surface_pressure_pa: f64,
     pub surface_extinction_per_m_at_reference_pressure: f64,
@@ -145,7 +238,6 @@ impl PhysicsDataManifest {
         }
         if self.shape.iter().product::<usize>() != OBSERVER_PRODUCT_VALUE_COUNT
             || self.response_basis_linear_rgb.len() != OBSERVER_PRODUCT_VALUE_COUNT
-            || self.surface_terrain_product_id.is_empty()
             || self
                 .response_basis_linear_rgb
                 .iter()
@@ -164,11 +256,15 @@ impl PhysicsDataManifest {
     #[must_use]
     pub fn first_slice_fixture() -> Self {
         Self {
-            physics_data_manifest_schema_revision: "physics-data-manifest-fixture-v1".to_owned(),
-            physics_data_manifest_id: "physics-data:fixture:v1".to_owned(),
-            physics_model_revision: "fixture-single-scatter-scalar-v1".to_owned(),
-            response_basis_revision: "fixture-reference-response-v1".to_owned(),
-            surface_terrain_product_id: "surface-terrain:fixture-flat-lambertian:v1".to_owned(),
+            physics_data_manifest_schema_revision: StableId::new(
+                "physics-data-manifest-fixture-v1",
+            )
+            .unwrap(),
+            physics_data_manifest_id: StableId::new("physics-data:fixture:v1").unwrap(),
+            physics_model_revision: StableId::new("fixture-single-scatter-scalar-v1").unwrap(),
+            response_basis_revision: StableId::new("fixture-reference-response-v1").unwrap(),
+            surface_terrain_product_id: StableId::new("surface-terrain:fixture-flat-lambertian:v1")
+                .unwrap(),
             reference_directional_intensity_w_sr: 70.0,
             reference_surface_pressure_pa: 99_850.0,
             surface_extinction_per_m_at_reference_pressure: 1.2e-4,
@@ -182,15 +278,15 @@ impl PhysicsDataManifest {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct SurfaceTerrainProduct {
-    pub surface_terrain_product_schema_revision: String,
-    pub surface_terrain_product_id: String,
+    pub surface_terrain_product_schema_revision: StableId,
+    pub surface_terrain_product_id: StableId,
     pub content_license: String,
     pub height_datum: String,
     pub terrain_height_m: f64,
     pub surface_normal_enu: [f64; 3],
     pub brdf_model: String,
     pub diffuse_albedo: f64,
-    pub data_validity: String,
+    pub data_validity: DataValidity,
 }
 
 impl SurfaceTerrainProduct {
@@ -207,7 +303,7 @@ impl SurfaceTerrainProduct {
         }
         if self.height_datum != "WGS84-ellipsoid"
             || self.brdf_model != "lambertian"
-            || self.data_validity != "valid"
+            || self.data_validity != DataValidity::Valid
             || !(0.0..=1.0).contains(&self.diffuse_albedo)
             || self.surface_normal_enu != [0.0, 0.0, 1.0]
             || !self.terrain_height_m.is_finite()
@@ -236,19 +332,19 @@ pub const FIRST_SLICE_RESPONSE_BASIS: [f64; OBSERVER_PRODUCT_VALUE_COUNT] = [
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnvironmentInputs {
-    pub emission_release_id: String,
-    pub atmosphere_release_id: String,
-    pub atmosphere_valid_time_utc: String,
+    pub emission_release_id: StableId,
+    pub atmosphere_release_id: StableId,
+    pub atmosphere_valid_time_utc: UtcInstant,
     pub directional_intensity_w_sr: Vec<f64>,
     pub mean_surface_pressure_pa: f64,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct ObserverRenderProduct {
-    pub observer_render_product_schema_revision: String,
-    pub physics_abi_revision: String,
-    pub physics_model_revision: String,
-    pub physics_data_manifest_id: String,
+    pub observer_render_product_schema_revision: StableId,
+    pub physics_abi_revision: StableId,
+    pub physics_model_revision: StableId,
+    pub physics_data_manifest_id: StableId,
     pub scenario_revision: u64,
     pub coherent_barrier: String,
     pub projection: String,
@@ -258,10 +354,26 @@ pub struct ObserverRenderProduct {
     pub quantity: String,
     pub unit: String,
     pub values: Vec<f32>,
-    pub data_validity: String,
+    pub data_validity: DataValidity,
     pub fidelity: String,
     pub convergence: Convergence,
-    pub uncertainty_status: String,
+    pub uncertainty_status: UncertaintyStatus,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DataValidity {
+    Valid,
+    Missing,
+    Masked,
+    Censored,
+    NotCovered,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum UncertaintyStatus {
+    SyntheticNotStatistical,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -295,5 +407,50 @@ impl PhysicsError {
             Self::Cancelled => "cancelled",
             Self::NumericalNonConvergence => "numerical_non_convergence",
         }
+    }
+}
+
+impl fmt::Display for PhysicsError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.category())
+    }
+}
+
+impl std::error::Error for PhysicsError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SCENARIO: &str = include_str!("../../../../contracts/fixtures/v1/observer-scenario.json");
+
+    #[test]
+    fn scenario_rejects_ambient_time_and_malformed_identity() {
+        let ambient = SCENARIO.replace("2024-01-15T00:00:00Z", "latest");
+        assert_eq!(
+            ObserverScenario::from_json(&ambient),
+            Err(PhysicsError::InvalidDescriptor)
+        );
+        let malformed = SCENARIO.replace(
+            "emission:fixture:central-poland-2x2:v1",
+            "emission with spaces",
+        );
+        assert_eq!(
+            ObserverScenario::from_json(&malformed),
+            Err(PhysicsError::InvalidDescriptor)
+        );
+    }
+
+    #[test]
+    fn error_categories_are_stable_abi_vocabulary() {
+        assert_eq!(PhysicsError::Cancelled.category(), "cancelled");
+        assert_eq!(
+            PhysicsError::InvalidUnitsOrCoordinates.category(),
+            "invalid_units_or_coordinates"
+        );
+        assert_eq!(
+            PhysicsError::NumericalNonConvergence.category(),
+            "numerical_non_convergence"
+        );
     }
 }

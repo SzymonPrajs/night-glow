@@ -146,7 +146,7 @@ Wasm boundary, GPU path or deployment model implausible.
 
 ## M2 — Workspaces, contracts and conformance harnesses
 
-State: **planned**
+State: **complete** (synthetic first-slice contract; M1 scientific feasibility gates remain open)
 
 - [x] Create the Environment Rust workspace with shared core/manifest crates and
   separate emission and atmosphere package families.
@@ -156,7 +156,7 @@ State: **planned**
   package with capability, lifecycle, cancellation, transfer, and memory tests.
 - [x] Freeze the first machine-readable Environment and Physics/Viewer schemas and
   revision rules from the system contract.
-- [ ] Implement typed quantities, units, coordinates, times, identifiers,
+- [x] Implement typed quantities, units, coordinates, times, identifiers,
   validity/evidence/uncertainty and structured errors before domain equations.
 - [x] Publish tiny language-neutral emission, atmosphere, Physics and Viewer
   conformance fixtures.
@@ -167,6 +167,10 @@ State: **planned**
 
 Gate: every package can decode or reject the same tiny products consistently, and
 no integration depends on an internal crate from another project.
+
+Evidence: [M3 non-UI fixture-slice report](evidence/m3-non-ui-fixture-slice.md)
+and the committed `make non-ui-check` CI surface. Completing this software gate
+does not waive the open real-data and reference-transfer evidence in M1.
 
 ## M3 — First end-to-end vertical slice
 

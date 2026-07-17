@@ -2,14 +2,14 @@
 
 use atmosphere_schema::AtmosphereFieldRelease;
 use emission_schema::EmissionRelease;
-use environment_core::EnvironmentError;
+use environment_core::{EnvironmentError, StableId};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnvironmentReleaseSet {
-    pub manifest_schema_revision: String,
-    pub release_set_id: String,
-    pub emission_release_id: String,
-    pub atmosphere_release_id: String,
+    pub manifest_schema_revision: StableId,
+    pub release_set_id: StableId,
+    pub emission_release_id: StableId,
+    pub atmosphere_release_id: StableId,
 }
 
 impl EnvironmentReleaseSet {

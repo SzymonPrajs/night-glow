@@ -3,7 +3,7 @@
 //! Physics does not import Environment implementation crates. This adapter
 //! validates the published boundary meanings and returns only Physics inputs.
 
-use nightglow_core::{EnvironmentInputs, PhysicsError};
+use nightglow_core::{EnvironmentInputs, PhysicsError, StableId, UtcInstant};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -70,9 +70,9 @@ pub fn decode_environment_inputs(
     validate_emission(&emission)?;
     let mean_surface_pressure_pa = validate_atmosphere(&atmosphere)?;
     Ok(EnvironmentInputs {
-        emission_release_id: emission.emission_release_id,
-        atmosphere_release_id: atmosphere.atmosphere_release_id,
-        atmosphere_valid_time_utc: atmosphere.selection.valid_time_utc,
+        emission_release_id: StableId::new(emission.emission_release_id)?,
+        atmosphere_release_id: StableId::new(atmosphere.atmosphere_release_id)?,
+        atmosphere_valid_time_utc: UtcInstant::new(atmosphere.selection.valid_time_utc)?,
         directional_intensity_w_sr: emission
             .cells
             .into_iter()

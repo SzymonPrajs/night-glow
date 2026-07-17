@@ -1,12 +1,12 @@
 //! Chunk-oriented emission queries over validated immutable releases.
 
 use emission_schema::{CoverageStatus, EmissionRelease};
-use environment_core::{DataValidity, EnvironmentError, Wgs84Bounds};
+use environment_core::{DataValidity, EnvironmentError, StableId, Wgs84Bounds};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SurfaceEmissionBatch {
-    pub emission_release_id: String,
-    pub cell_ids: Vec<String>,
+    pub emission_release_id: StableId,
+    pub cell_ids: Vec<StableId>,
     pub longitude_deg_east: Vec<f64>,
     pub latitude_deg_north: Vec<f64>,
     pub support_area_m2: Vec<f64>,
@@ -80,6 +80,13 @@ mod tests {
         let batch = query_emission(&release, bounds).unwrap();
         assert_eq!(batch.len(), 4);
         assert_eq!(batch.total_directional_intensity_w_sr(), 70.0);
-        assert_eq!(batch.cell_ids, ["sw", "se", "nw", "ne"]);
+        assert_eq!(
+            batch
+                .cell_ids
+                .iter()
+                .map(StableId::as_str)
+                .collect::<Vec<_>>(),
+            ["sw", "se", "nw", "ne"]
+        );
     }
 }

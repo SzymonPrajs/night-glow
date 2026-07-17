@@ -1,6 +1,9 @@
 //! Immutable atmosphere-release schema and semantic validation.
 
-use environment_core::{EnvironmentError, validate_height_pressure_column};
+use environment_core::{
+    AtmosphereSelectionMode, DataValidity, EnvironmentError, SourceEvidenceClass, StableId,
+    UtcInstant, validate_height_pressure_column,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -8,27 +11,27 @@ pub const FIXTURE_SCHEMA_REVISION: &str = "atmosphere-fixture-v1";
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct AtmosphereFieldRelease {
-    pub atmosphere_schema_revision: String,
-    pub atmosphere_model_revision: String,
-    pub atmosphere_release_id: String,
-    pub source_run_id: String,
+    pub atmosphere_schema_revision: StableId,
+    pub atmosphere_model_revision: StableId,
+    pub atmosphere_release_id: StableId,
+    pub source_run_id: StableId,
     pub content_license: String,
     pub selection: AtmosphereSelection,
     pub axes: AtmosphereAxes,
     pub shape: [usize; 3],
     pub variables: BTreeMap<String, AtmosphereVariable>,
-    pub data_validity: String,
-    pub uncertainty_status: String,
+    pub data_validity: DataValidity,
+    pub uncertainty_status: StableId,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct AtmosphereSelection {
-    pub mode: String,
-    pub requested_time_utc: String,
-    pub valid_time_utc: String,
-    pub standard_scenario_id: String,
-    pub interpolation_revision: String,
-    pub downscaling_revision: String,
+    pub mode: AtmosphereSelectionMode,
+    pub requested_time_utc: UtcInstant,
+    pub valid_time_utc: UtcInstant,
+    pub standard_scenario_id: StableId,
+    pub interpolation_revision: StableId,
+    pub downscaling_revision: StableId,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -43,7 +46,7 @@ pub struct AtmosphereAxes {
 pub struct AtmosphereVariable {
     pub unit: String,
     pub wet_dry_basis: String,
-    pub evidence: String,
+    pub evidence: SourceEvidenceClass,
     pub values: Vec<f64>,
 }
 
@@ -58,6 +61,11 @@ impl AtmosphereFieldRelease {
     pub fn validate(&self) -> Result<(), EnvironmentError> {
         if self.atmosphere_schema_revision != FIXTURE_SCHEMA_REVISION {
             return Err(EnvironmentError::IncompatibleSchema);
+        }
+        if self.selection.mode != AtmosphereSelectionMode::StandardScenario
+            || self.selection.requested_time_utc != self.selection.valid_time_utc
+        {
+            return Err(EnvironmentError::IncompatibleSemantics);
         }
         if self.axes.axis_order != ["latitude", "longitude", "height"] {
             return Err(EnvironmentError::IncompatibleSemantics);
