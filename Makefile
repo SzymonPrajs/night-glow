@@ -93,7 +93,7 @@ contract-check: ## Validate the language-neutral cross-package conformance fixtu
 reproducibility-check: ## Verify pinned non-UI build inputs, assets, and licence declarations.
 	@node tools/check-reproducibility.mjs
 
-non-ui-check: docs-check contract-check reproducibility-check rust-format-check rust-check rust-test wasm-probe coordinator-test ## Run the complete non-UI CI surface.
+non-ui-check: docs-check contract-check reproducibility-check rust-format-check rust-check rust-test native-probe wasm-probe coordinator-test ## Run the complete non-UI CI surface.
 
 rust-prepare: ## Install the standard browser Wasm target when rustup is available.
 	@./tools/rust-workspaces.sh prepare
@@ -114,6 +114,7 @@ rust-wasm: ## Compile every implemented Rust Wasm binding.
 	@./tools/rust-workspaces.sh wasm
 
 native-probe: ## Run the bounded native Environment and Physics conformance probes.
+	@cargo run --release --manifest-path packages/environment/Cargo.toml -p environment-precompute -- fixture-report
 	@cargo run --release --manifest-path packages/environment/Cargo.toml -p environment-conformance
 	@cargo run --release --manifest-path packages/physics/Cargo.toml -p nightglow-validation
 

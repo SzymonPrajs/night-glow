@@ -83,6 +83,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "environment-precompute"
+version = "0.1.0"
+dependencies = [
+ "atmosphere-ingest",
+ "emission-ingest-black-marble",
+ "environment-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "environment-wasm"
 version = "0.1.0"
 dependencies = [

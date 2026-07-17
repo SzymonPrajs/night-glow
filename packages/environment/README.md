@@ -15,7 +15,10 @@ The first synthetic contract slice is implemented in Rust. Independent emission
 and atmosphere schemas decode immutable language-neutral fixtures, regional
 queries return contiguous batches, Physics can consume those products without
 importing Environment crates, and a thin Wasm adapter validates field-sized
-buffers. `environment-conformance` executes the release/query boundary.
+buffers. `environment-conformance` executes the release/query boundary, and the
+thin `environment-precompute fixture-report` command deterministically
+orchestrates the two extracted synthetic adapters without moving their science
+into the CLI.
 
 This does not claim provider or scientific-product readiness. Black Marble and
 model-atmosphere ingestion, fusion, uncertainty calibration, real-data licence
