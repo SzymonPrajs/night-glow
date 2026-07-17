@@ -11,12 +11,15 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test:appearance": "tsx scripts/verify-realistic-appearance.ts",
+    "test:astronomy": "tsx scripts/verify-astronomy-vectors.ts",
     "test:celestial": "tsx scripts/verify-celestial-light.ts",
     "test:seeing": "tsx scripts/verify-seeing-psf.ts",
     "test:calibration": "tsx scripts/verify-regional-calibration.ts",
     "test:physics": "tsx scripts/verify-physical-model.ts",
     "test:weather": "tsx scripts/verify-weather-presets.ts",
     "test:weather:regional": "node --expose-gc --import tsx scripts/verify-regional-weather-output.ts",
+    "test:m1-browser": "playwright test tests/m1-browser-probe.spec.ts --workers=1",
+    "test:m1-runtime": "playwright test --config playwright.runtime.config.ts --workers=1",
     "test:e2e": "playwright test"
   },
   "dependencies": {

@@ -12,13 +12,14 @@ targets=(
   apps/reference-viewer/tsconfig.app.tsbuildinfo
   apps/reference-viewer/tsconfig.node.tsbuildinfo
   apps/viewer/.next
+  apps/viewer/experiments/runtime/.next
   apps/viewer/dist
   apps/viewer/coverage
   .vercel
 )
 
 if [[ "$mode" == all ]]; then
-  targets+=(apps/reference-viewer/node_modules apps/viewer/node_modules)
+  targets+=(apps/reference-viewer/node_modules apps/viewer/node_modules apps/viewer/experiments/runtime/node_modules)
 elif [[ "$mode" != build ]]; then
   printf 'usage: %s [all]\n' "$0" >&2
   exit 2

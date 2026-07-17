@@ -1,4 +1,4 @@
-# Night Glow coordinator worker — design boundary
+# Night Glow coordinator worker
 
 This runtime defines the production browser worker that connects the Viewer to
 the independently versioned Environment and Physics WebAssembly modules. It is a
@@ -55,19 +55,30 @@ Messages must carry protocol and schema revisions, request and scenario revision
 dependency identities, and transfer ownership. Results from superseded scenarios
 are discarded before they can mutate Viewer state.
 
-## Planned package shape
+## Implemented first slice
 
 ```text
 runtime/browser-worker/
 ├── README.md                 this reviewed boundary
-├── src/                      future TypeScript worker host and module adapters
-├── tests/                    protocol, cancellation, memory, and browser tests
-└── fixtures/                 tiny language-neutral conformance products
+├── package.json              dependency-free Node protocol tests
+├── src/
+│   ├── coordinator.js        testable runtime lifecycle and Wasm host
+│   └── coordinator.worker.js thin module-worker message adapter
+└── test/
+    └── coordinator.test.js   protocol, cancellation, parity, and memory tests
 ```
 
-Do not add placeholder implementation files merely to match this tree. The first
-code belongs to the bounded Wasm/transfer feasibility proof in the
-[implementation plan](../../implementation/README.md).
+The coordinator instantiates the independently built Environment and Physics
+Wasm modules, validates ABI revisions, transfers one field-sized Environment
+buffer, publishes progress at bounded cancellation points, rejects superseded
+work, and returns a copied coherent float product with memory accounting. The
+worker wrapper transfers product-buffer ownership to its caller and maps failures
+to stable categories.
+
+The implementation is deliberately fixture-sized. It does not fetch provider
+assets, manage production release handles/caches, run threads, or contain a
+scientific equation. No Viewer code or build step is required to test it; run
+`make coordinator-test` from the repository root.
 
 Related plans: [Viewer rendering and workers](../../apps/viewer/docs/architecture/rendering-and-workers.md),
 [Physics Wasm ABI](../../packages/physics/docs/contracts/wasm-abi.md), and

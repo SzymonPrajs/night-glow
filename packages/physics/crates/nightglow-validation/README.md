@@ -2,6 +2,12 @@
 
 Scientific and numerical evidence for the toolkit. Validation is not limited to unit tests and screenshots.
 
+The current executable independently decodes the language-neutral Environment
+fixtures, resolves the complete scenario and terrain/data manifests, publishes
+the coherent product, compares all 24 `f32` values with the contract fixture,
+and reports convergence against the analytic exponential column. JPL vector and
+browser evidence remain in the reference-viewer/tooling harness.
+
 ## Proposed modules
 
 - `analytic`: vacuum, optically thin, symmetric, Lambertian, inverse-square, and known-integral cases.

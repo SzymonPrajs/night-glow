@@ -1,12 +1,20 @@
-# Planned Rust crates
+# Environment Rust crates
 
-No crates exist during the design phase. Shared infrastructure and the two independent domain families are described in [the environment architecture](../docs/architecture/workspace.md). Emission implementation gates remain in [the emission roadmap](../docs/emission/implementation-roadmap.md); atmosphere gates are in [the atmospheric roadmap](../docs/atmosphere/roadmap-and-todo.md).
+The first contract slice implements shared validation, independent emission and
+atmosphere schemas, contiguous regional query products, an optional compatibility
+manifest, a native conformance executable, and a thin Wasm buffer adapter.
+Provider ingestion and calibrated fusion remain gated by the emission and
+atmosphere feasibility experiments. Shared infrastructure and the two independent domain families are described in
+[the environment architecture](../docs/architecture/workspace.md).
 
 The intended boundary is shared units/provenance/manifest infrastructure, not shared scientific records. Emission and atmospheric releases must remain independently buildable, versioned, testable and consumable.
 
-## Canonical planned packages
+## Canonical packages
 
-These names are authoritative for subsequent scaffolding:
+These names are authoritative. The first-slice implementation currently includes
+`environment-core`, `environment-manifest`, `emission-schema`, `emission-core`,
+`atmosphere-schema`, `atmosphere-format`, and `environment-conformance`; the
+remaining domain packages are planned:
 
 | Package | Responsibility |
 | --- | --- |

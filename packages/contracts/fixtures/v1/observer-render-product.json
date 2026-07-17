@@ -1,0 +1,33 @@
+{
+  "observer_render_product_schema_revision": "observer-render-fixture-v1",
+  "physics_abi_revision": "physics-abi-fixture-v1",
+  "physics_model_revision": "fixture-single-scatter-scalar-v1",
+  "physics_data_manifest_id": "physics-data:fixture:v1",
+  "scenario_revision": 1,
+  "coherent_barrier": "coarse_complete",
+  "projection": "azimuth-elevation-equirectangular",
+  "shape": [2, 4, 3],
+  "axis_order": ["elevation", "azimuth", "linear_rgb"],
+  "component_type": "float32",
+  "quantity": "spectral-response-integrated-radiance",
+  "unit": "W m-2 sr-1",
+  "values": [
+    0.000001, 0.0000008, 0.0000005,
+    0.0000012, 0.0000009, 0.00000055,
+    0.0000014, 0.000001, 0.0000006,
+    0.0000011, 0.00000085, 0.00000052,
+    0.0000003, 0.00000035, 0.0000004,
+    0.00000032, 0.00000037, 0.00000042,
+    0.00000034, 0.00000039, 0.00000044,
+    0.00000031, 0.00000036, 0.00000041
+  ],
+  "data_validity": "valid",
+  "fidelity": "synthetic-contract-only",
+  "convergence": {
+    "status": "converged",
+    "relative_residual": 0
+  },
+  "uncertainty_status": "synthetic-not-statistical",
+  "display_transform": null
+}
+

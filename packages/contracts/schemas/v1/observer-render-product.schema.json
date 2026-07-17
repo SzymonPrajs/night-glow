@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nightglow.invalid/schemas/v1/observer-render-product.schema.json",
+  "title": "ObserverRenderProduct fixture v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["observer_render_product_schema_revision", "physics_abi_revision", "physics_model_revision", "physics_data_manifest_id", "scenario_revision", "coherent_barrier", "projection", "shape", "axis_order", "component_type", "quantity", "unit", "values", "data_validity", "fidelity", "convergence", "uncertainty_status", "display_transform"],
+  "properties": {
+    "observer_render_product_schema_revision": {"const": "observer-render-fixture-v1"},
+    "physics_abi_revision": {"const": "physics-abi-fixture-v1"},
+    "physics_model_revision": {"type": "string", "minLength": 1},
+    "physics_data_manifest_id": {"type": "string", "minLength": 1},
+    "scenario_revision": {"type": "integer", "minimum": 1},
+    "coherent_barrier": {"const": "coarse_complete"},
+    "projection": {"const": "azimuth-elevation-equirectangular"},
+    "shape": {"type": "array", "prefixItems": [{"type": "integer", "minimum": 1}, {"type": "integer", "minimum": 1}, {"const": 3}], "items": false},
+    "axis_order": {"const": ["elevation", "azimuth", "linear_rgb"]},
+    "component_type": {"const": "float32"},
+    "quantity": {"const": "spectral-response-integrated-radiance"},
+    "unit": {"const": "W m-2 sr-1"},
+    "values": {"type": "array", "minItems": 1, "items": {"type": "number", "minimum": 0}},
+    "data_validity": {"enum": ["valid", "missing", "masked", "censored", "not_covered"]},
+    "fidelity": {"type": "string", "minLength": 1},
+    "convergence": {"type": "object", "additionalProperties": false, "required": ["status", "relative_residual"], "properties": {"status": {"type": "string", "minLength": 1}, "relative_residual": {"type": "number", "minimum": 0}}},
+    "uncertainty_status": {"type": "string", "minLength": 1},
+    "display_transform": {"type": "null"}
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "fixture_revision": "nightglow-fixture-v1",
+  "license": "CC0-1.0",
+  "created_utc": "2026-07-17",
+  "hash_algorithm": "sha256",
+  "files": {
+    "atmosphere-release.json": "5431c135383c1f710eaa325d19a5018892487d249f6cab92fb6999e7b42c0603",
+    "conventions.json": "f0f2ff15bc1911f77dd2b83e434a21f8aadd3bc8409b346465f5c02555d11556",
+    "emission-release.json": "46b6b032a2ef57a14b39428d87fd34c09edb52c220148d9ee8dadb231fccbd2b",
+    "environment-display-products.json": "dbfe8e589ff969d15dadef6d72cd6b29bc37faee16ef65e8d8a086f52270ad46",
+    "observer-render-product.json": "d82a4463a5c4a35d4bf9d76cdafa5aac354fb5ec50fad760b11a2b1816ab4c56",
+    "observer-scenario.json": "33552ffc40c62d3b59357737ae148a3317a5049c9da3befa92fa06f467a24475"
+  }
+}
+

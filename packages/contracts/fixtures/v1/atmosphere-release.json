@@ -1,0 +1,45 @@
+{
+  "atmosphere_schema_revision": "atmosphere-fixture-v1",
+  "atmosphere_model_revision": "synthetic-layered-state-v1",
+  "atmosphere_release_id": "atmosphere:fixture:central-poland-2x2x3:v1",
+  "source_run_id": "synthetic:fixture:2024-01-15T00:00:00Z",
+  "content_license": "CC0-1.0",
+  "selection": {
+    "mode": "standard_scenario",
+    "requested_time_utc": "2024-01-15T00:00:00Z",
+    "valid_time_utc": "2024-01-15T00:00:00Z",
+    "standard_scenario_id": "clear-winter-layered-v1",
+    "interpolation_revision": "none-v1",
+    "downscaling_revision": "none-v1"
+  },
+  "axes": {
+    "longitude_deg_east": [21.0, 21.02],
+    "latitude_deg_north": [52.0, 52.02],
+    "geometric_height_m_above_wgs84_ellipsoid": [100, 1100, 3100],
+    "axis_order": ["latitude", "longitude", "height"]
+  },
+  "shape": [2, 2, 3],
+  "variables": {
+    "pressure_pa": {
+      "unit": "Pa",
+      "wet_dry_basis": "not-applicable",
+      "evidence": "explicit_standard",
+      "values": [100000, 88700, 68300, 99900, 88600, 68200, 99800, 88500, 68100, 99700, 88400, 68000]
+    },
+    "temperature_k": {
+      "unit": "K",
+      "wet_dry_basis": "not-applicable",
+      "evidence": "explicit_standard",
+      "values": [275, 269, 256, 275.2, 269.2, 256.2, 274.8, 268.8, 255.8, 275, 269, 256]
+    },
+    "relative_humidity_fraction": {
+      "unit": "1",
+      "wet_dry_basis": "ambient-wet-state",
+      "evidence": "explicit_standard",
+      "values": [0.72, 0.62, 0.42, 0.7, 0.6, 0.4, 0.74, 0.64, 0.44, 0.71, 0.61, 0.41]
+    }
+  },
+  "data_validity": "valid",
+  "uncertainty_status": "synthetic-not-statistical"
+}
+

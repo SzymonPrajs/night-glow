@@ -37,6 +37,14 @@ Native precompute remains co-located with its scientific owner. Root `tools/`
 may coordinate packages but never becomes a third home for domain equations or
 provider decoders.
 
+The first executable boundary examples live in [`fixtures/v1`](fixtures/v1/README.md).
+They freeze only the synthetic first-slice conventions recorded by
+[`implementation/decisions/0001`](../../implementation/decisions/0001-first-vertical-slice.md)
+and are validated with `make contract-check`. Their public descriptor shapes are
+frozen as JSON Schema 2020-12 documents in [`schemas/v1`](schemas/v1/README.md);
+Rust decoders add the semantic, conservation, and axis-order checks that cannot
+be expressed by shape validation alone.
+
 ## 2. Canonical product graph
 
 ```mermaid

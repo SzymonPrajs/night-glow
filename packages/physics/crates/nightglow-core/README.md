@@ -2,6 +2,12 @@
 
 Shared language for all calculations. This crate should be small, stable, and free of domain algorithms.
 
+The first implementation contains the scalar quantity newtypes used by the M1
+reference proof plus the frozen `ObserverScenario`, `PhysicsDataManifest`,
+`SurfaceTerrainProduct`, Environment-input, boundary-source, optical-state, and
+coherent render-product types needed by the synthetic vertical slice. Physical
+integration and response construction live in `nightglow-physics`.
+
 ## Proposed modules
 
 - `units`: newtypes for length, angle, time, temperature, pressure, number density, optical depth, wavelength, spectral radiance, radiant intensity, flux, irradiance, and dimensionless probabilities.
