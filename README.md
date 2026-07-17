@@ -1,10 +1,11 @@
 # Night Glow
 
-Night Glow is a planned browser system for reconstructing environmental inputs,
+Night Glow is a browser-system project for reconstructing environmental inputs,
 computing physically based sky radiance, and exploring the result from a globe or
-an observer on Earth. The repository is being organized before implementation so
-that data production, physics, browser orchestration, and rendering can evolve
-independently without duplicating scientific logic.
+an observer on Earth. Its software foundations and a bounded non-UI
+Environment-to-Physics-to-Wasm vertical slice are implemented. Real-data
+reconstruction, production-fidelity physics, the production Viewer and deployment
+remain gated work.
 
 ## Repository layout
 
@@ -20,7 +21,7 @@ Night Glow/
 ├── runtime/
 │   └── browser-worker/     browser/Wasm scheduling and memory ownership
 ├── data/                   policy for local inputs, fixtures, and generated data
-├── tools/                  future repository-wide build and release orchestration
+├── tools/                  repository-wide checks and orchestration
 └── implementation/         living system-level implementation checklist
 ```
 
@@ -48,6 +49,8 @@ and cancellable.
 
 ## Start here
 
+- [Current implementation status](implementation/STATUS.md) — what is implemented,
+  measured, open and explicitly not claimed.
 - [Implementation master plan](implementation/README.md) — system order and gates.
 - [Unified contracts](packages/contracts/README.md) — canonical products, scenario,
   revisions, ownership, and runtime lifecycle.
@@ -87,10 +90,11 @@ make clean              # generated build output
 make clean-all          # build output plus installed Node dependencies
 ```
 
-Until `apps/viewer/package.json` exists, web commands intentionally target the
-runnable reference viewer. They switch automatically to the production Viewer
-when its implementation is created. Deployment uses Vercel's documented `--cwd`
-flow and requires an authenticated CLI; credentials are never stored here.
+Web commands intentionally target the runnable reference viewer until the
+production Viewer exists. The bounded Next.js runtime proof under
+`apps/viewer/experiments/runtime/` is built separately and is not the production
+application. Deployment uses Vercel's documented `--cwd` flow and requires an
+authenticated CLI; credentials are never stored here.
 
 The repo-local Codex environment is
 [`.codex/environments/environment.toml`](.codex/environments/environment.toml),
@@ -98,5 +102,7 @@ with Run, Build, Validate, Database Migration, and Preview Deployment actions.
 The current application needs no runtime secrets; future variables must follow
 [`.env.example`](.env.example).
 
-The planning packages and runtime contain documentation and reserved workspace shapes;
-they do not yet replace the reference implementation.
+The Rust packages, native probes, Wasm bindings and coordinator runtime now have
+executable first-slice implementations. They deliberately stop before production
+provider ingest, calibrated physics and production UI; see the
+[implementation status](implementation/STATUS.md).

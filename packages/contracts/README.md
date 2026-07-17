@@ -2,9 +2,12 @@
 
 ## 1. Purpose
 
-This document is the cross-project vocabulary and lifecycle authority for the
-planned Night Glow system. Domain documents remain authoritative for their own
-physics and bytes, but they must use the names and boundaries defined here.
+This document is the cross-project vocabulary and lifecycle authority for Night
+Glow. The synthetic first-slice descriptors, schemas and compatibility checks are
+implemented; broader production contracts remain review-gated. Domain documents
+remain authoritative for their own physics and bytes, but they must use the names
+and boundaries defined here. See the repository
+[implementation status](../../implementation/STATUS.md) for the current boundary.
 
 The system has three independently releasable product packages and one browser
 coordination package:

@@ -1,5 +1,16 @@
 # Viewer implementation roadmap
 
+## Current implementation checkpoint
+
+Phase 1B's bounded worker-to-WebGL2 HDR upload and the local portions of Phase 1C's
+Next.js route/runtime proof have passed. The proof covers transfer detachment,
+stale-revision cancellation, linear-float readback, disposal, route separation and
+local production builds. It does not close MapLibre scientific-layer semantics,
+production Vercel headers/assets, context recovery or any production UI phase.
+Phases 2–9 remain planned. See the repository
+[implementation status](../../../../implementation/STATUS.md) and
+[M1 evidence](../../../../implementation/evidence/m1-bounded-proofs.md).
+
 ## Phase 0 — review and vocabulary
 
 Deliverables:

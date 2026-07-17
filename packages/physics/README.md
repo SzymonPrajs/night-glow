@@ -8,6 +8,9 @@ construction, an analytic single-scatter response, native
 validation, a deterministic native fixture-precompute report, and a thin raw
 Wasm export. It is not yet the production solver.
 
+The exact verified checkpoint and remaining scientific gates are summarized in
+the repository [implementation status](../../implementation/STATUS.md).
+
 The central rule is simple:
 
 > There will be one Rust implementation of each physical calculation. Native precomputation and browser WebAssembly will be two execution targets over that implementation. WebGL2 will render the resulting radiance fields; it will not own the physics.

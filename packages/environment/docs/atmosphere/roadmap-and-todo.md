@@ -1,5 +1,16 @@
 # Atmospheric roadmap and TODO
 
+## Current implementation checkpoint
+
+The synthetic contract subset of Phase 2 is implemented: typed identities,
+selection/evidence/validity semantics, immutable release decoding, contiguous
+regional pressure queries, extracted-metadata normalization for ERA5/CAMS and
+MERRA-2, missingness/unit/vertical/wet-dry rejection, deterministic native
+orchestration and a field-sized Wasm adapter. Phase 1 remains the active gate
+because no credentialed provider subset has been retrieved or decoded. No
+historical, forecast, climatology or production chunk release is claimed. See the
+repository [implementation status](../../../../implementation/STATUS.md).
+
 ## Phase 0 — source and contract review
 
 - [ ] Freeze exact ERA5, CAMS forecast/reanalysis and MERRA-2 collections/variables/levels.
@@ -26,12 +37,12 @@ Gate: no global build until quantities close and a compact chunk is demonstrably
 
 ## Phase 2 — core Rust and adapters
 
-- [ ] implement `environment-core` typed quantities/evidence/provenance;
-- [ ] implement canonical `SourceRunIdentity`, atmosphere selection and vertical-coordinate structures;
-- [ ] add native ERA5, CAMS and MERRA-2 adapters behind fixtures;
-- [ ] normalize without fusion first;
+- [x] implement first-slice `environment-core` typed quantities/evidence/provenance;
+- [x] implement first-slice source-run, atmosphere selection and geometric-height structures;
+- [x] add extracted-metadata ERA5, CAMS and MERRA-2 adapters behind synthetic fixtures; real provider-file adapters remain open;
+- [x] normalize the synthetic extracted variables without fusion;
 - [ ] implement deterministic chunk writer/reader and native/Wasm parity;
-- [ ] add corrupt/incompatible fixture cases.
+- [x] add first-slice corrupt/incompatible fixture cases.
 
 ## Phase 3 — historical and operational products
 
@@ -68,7 +79,7 @@ Gate: no global build until quantities close and a compact chunk is demonstrably
 
 ## Phase 7 — end-to-end Physics validation
 
-- [ ] consume the atmosphere conformance fixture in native and Wasm Physics tests;
+- [x] consume the first-slice atmosphere conformance fixture in native and Wasm Physics tests; broader regional cases remain open;
 - [ ] compare uniform-column versus 3-D plume results and quantify materiality;
 - [ ] validate horizon/source-region scattering under humidity/aerosol gradients;
 - [ ] run paired all-sky observations across atmospheric regimes;

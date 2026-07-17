@@ -2,6 +2,20 @@
 
 No phase should begin merely because folders exist. Each gate produces reviewable evidence.
 
+## Current implementation checkpoint
+
+| Phase | Status |
+| --- | --- |
+| Phase 0 | architecture documented; first-slice decisions are frozen, broader scientific review remains open |
+| Phase 1 | partial: typed core, flat/spherical exponential primitives, convergence tests and plane-parallel libRadtran pure-absorption comparison; the full Sun/Lambertian/curved-Earth reference case remains open |
+| Phase 2 | partial: deterministic fixture precompute, immutable manifests, terrain product and independent Environment adapters; real regional tiles/LUTs/catalogues are open |
+| Phase 3 | not started beyond the synthetic artificial-light boundary source |
+| Phase 4 | synthetic first-slice native/Wasm parity, single-worker cancellation, compatibility, memory and disposal gates pass; production coarse APIs and optional accelerators are open |
+| Phases 5–7 | not started as production implementation |
+
+See the repository [implementation status](../../../../implementation/STATUS.md)
+and [non-UI evidence](../../../../implementation/evidence/m3-non-ui-fixture-slice.md).
+
 ## Phase 0 — architecture review (this folder)
 
 Deliverables:

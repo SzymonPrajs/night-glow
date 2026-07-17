@@ -4,7 +4,18 @@ No production code should be written before Phase 0 is reviewed. Each phase ends
 
 This chapter is the ordered roadmap for the **emission domain**. The atmosphere domain has its own independently gated [roadmap and TODO](../atmosphere/roadmap-and-todo.md). Shared schema/provenance/format/Wasm infrastructure may be coordinated, but one domain never blocks its releases merely because the other is incomplete.
 
-## Phase 0 — Design review (current)
+## Current implementation checkpoint
+
+The first-slice portion of Phase 1 exists: the Rust workspace, typed core/schema,
+conservative support integration, immutable language-neutral fixture, native
+conformance command and thin Wasm buffer adapter are implemented. A synthetic
+Collection 2 extracted-metadata normalizer exercises radiance scale/fill handling,
+mandatory QA states, snow and cloud-mask meanings, but it does not decode real
+NASA HDF5/GeoTIFF bytes. Phase 2 therefore remains the active emission gate; later
+phases have not started. See the repository
+[implementation status](../../../../implementation/STATUS.md).
+
+## Phase 0 — Design review (completed for the first slice)
 
 Deliverables:
 
@@ -17,7 +28,7 @@ Deliverables:
 
 Gate: agree that `EmissionRelease` is a source product, that `J_DNB` is its conserved measured quantity, that spectrum/angle/time may remain unresolved, and that the domains/projects communicate through the one-way contracts in [physics-handoff.md](physics-handoff.md) and [../atmosphere/physics-handoff.md](../atmosphere/physics-handoff.md).
 
-## Phase 1 — Minimal Rust workspace and fixtures
+## Phase 1 — Minimal Rust workspace and fixtures (first-slice subset implemented)
 
 Create workspace crates only after review:
 
@@ -41,7 +52,7 @@ First code is tests for units, QA sentinels, H3 hierarchy, conservation, and cor
 
 Gate: native and Wasm schema/core tests pass with no GDAL/HDF dependency in consumer crates.
 
-## Phase 2 — Black Marble feasibility ingest
+## Phase 2 — Black Marble feasibility ingest (active real-data gate)
 
 Implement one Collection 2 product and a tiny fixture:
 

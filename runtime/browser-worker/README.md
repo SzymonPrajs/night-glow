@@ -87,6 +87,9 @@ assets, manage production release handles/caches, run threads, or contain a
 scientific equation. No Viewer code or build step is required to test it; run
 `make coordinator-test` from the repository root.
 
+The repository [implementation status](../../implementation/STATUS.md) places
+this completed first-slice lifecycle boundary in the wider delivery plan.
+
 Related plans: [Viewer rendering and workers](../../apps/viewer/docs/architecture/rendering-and-workers.md),
 [Physics Wasm ABI](../../packages/physics/docs/contracts/wasm-abi.md), and
 [Environment format/API](../../packages/environment/docs/emission/format-and-api.md).

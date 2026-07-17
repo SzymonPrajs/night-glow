@@ -25,6 +25,9 @@ model-atmosphere ingestion, fusion, uncertainty calibration, real-data licence
 evidence, global partitioning, and production publication remain gated by the
 bounded feasibility work.
 
+The cross-domain checkpoint, exact measurements and remaining gates are summarized
+in the repository [implementation status](../../implementation/STATUS.md).
+
 The final package name is `packages/environment/`. This does not turn one emission schema into a catch-all record: `EmissionRelease` and `AtmosphereFieldRelease` are separate products with independent model revisions, temporal behavior, spatial representations, and validation.
 
 ## Start here

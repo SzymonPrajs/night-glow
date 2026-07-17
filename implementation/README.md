@@ -17,11 +17,15 @@ same architecture to global data and high-fidelity browser rendering.
 | Item | State |
 | --- | --- |
 | Current milestone | M1 — bounded feasibility proofs |
-| Next system gate | close real-data, reference-transfer and deployment/browser feasibility evidence |
-| Running product | existing TypeScript/Vite application remains the baseline |
-| Planned architecture | documentation complete enough for bounded feasibility work |
-| Rust implementation | synthetic Environment-to-Physics vertical slice and dual-Wasm coordinator implemented; real-data and fidelity gates remain open |
+| Completed system work | M0 and synthetic-contract M2 complete; non-UI M3 slice complete |
+| Next system gate | close real-data and curved-Earth reference-transfer evidence; production Viewer/deployment remain separate later gates |
+| Running product | existing TypeScript/Vite reference viewer remains the baseline; bounded Next runtime proof is not production UI |
+| Implemented architecture | typed contracts, both Rust workspaces, native probes, dual Wasm modules and coordinator lifecycle |
+| Rust implementation | synthetic Environment-to-Physics vertical slice implemented and validated; real-data and production-fidelity gates remain open |
 | Production deployment | not started |
+
+See the [current implementation status](STATUS.md) for the concise cross-domain
+snapshot, measured checkpoint and critical path.
 
 ## How to maintain this plan
 
@@ -174,7 +178,7 @@ does not waive the open real-data and reference-transfer evidence in M1.
 
 ## M3 — First end-to-end vertical slice
 
-State: **planned**
+State: **active** (non-UI slice complete; two production Viewer tasks remain open)
 
 - [x] Produce one tiny `EmissionRelease`, one `AtmosphereFieldRelease`, their
   independent `EnvironmentDisplayProduct` derivatives and one Physics-owned
@@ -203,7 +207,7 @@ without bypassing a planned contract or duplicating physics.
 
 ## M4 — Environment v1
 
-State: **planned**
+State: **planned** (synthetic schema/adapter/precompute prerequisites implemented)
 
 - [ ] Implement the emission roadmap through a validated regional release:
   ingestion, correction semantics, conservative reconstruction, profiles,
@@ -225,7 +229,7 @@ and [atmosphere roadmap](../packages/environment/docs/atmosphere/roadmap-and-tod
 
 ## M5 — Physics v1
 
-State: **planned**
+State: **planned** (bounded reference kernel, adapters and native/Wasm prerequisites implemented)
 
 - [ ] Implement typed time scales, Earth orientation, reference frames,
   ephemerides, stellar propagation and terrain geometry with reference tests.
@@ -252,7 +256,7 @@ Detailed owner: [Physics roadmap](../packages/physics/docs/governance/roadmap.md
 
 ## M6 — Viewer v1
 
-State: **planned**
+State: **planned** (bounded runtime experiments exist; production UI is unimplemented)
 
 - [ ] Build the Next.js application shell with independently loaded `/globe` and
   `/observe` client routes and accessible shared navigation.

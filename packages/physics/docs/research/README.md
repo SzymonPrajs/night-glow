@@ -1,6 +1,11 @@
 # Research dossiers
 
-These notes identify candidate methods, primary sources, unresolved questions, and decisions required before implementation. A cited source is a research lead, not automatic adoption.
+These notes identify candidate methods, primary sources, unresolved questions,
+and decisions required before production adoption. The bounded exponential,
+spherical-convergence and libRadtran pure-absorption implementations do not imply
+that the broader candidates have been selected. A cited source is a research lead,
+not automatic adoption. See the repository
+[implementation status](../../../../implementation/STATUS.md).
 
 - [Radiative transfer](radiative-transfer.md)
 - [Astronomy and time](astronomy-and-time.md)
