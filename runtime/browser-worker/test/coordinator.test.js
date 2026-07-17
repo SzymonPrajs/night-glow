@@ -94,3 +94,33 @@ test('rejects a budget that cannot hold the coherent product', async () => {
     (error) => error instanceof CoordinatorError && error.category === 'resource_exhausted',
   )
 })
+
+test('releases Wasm request views after successful and rejected work', async () => {
+  const coordinator = await initializedCoordinator()
+  await coordinator.commitScenario(await fixtureRequest())
+  const successful = coordinator.diagnostics()
+  assert.ok(successful.memoryBytes <= 32 * 1_048_576)
+  assert.equal(successful.retainedEnvironmentInputValues, 0)
+  assert.equal(successful.retainedEnvironmentSummaryValues, 0)
+  assert.equal(successful.retainedPhysicsOutputValues, 0)
+
+  const invalid = await fixtureRequest(2)
+  invalid.emission.j_dnb_nw_cm2_sr[0] = Number.NaN
+  await assert.rejects(
+    coordinator.commitScenario(invalid),
+    (error) => error instanceof CoordinatorError && error.category === 'invalid_units_or_coordinates',
+  )
+  assert.equal(coordinator.diagnostics().retainedEnvironmentInputValues, 0)
+  assert.equal(coordinator.diagnostics().retainedEnvironmentSummaryValues, 0)
+  assert.equal(coordinator.diagnostics().retainedPhysicsOutputValues, 0)
+})
+
+test('repeated scenarios reuse bounded Wasm memory', async () => {
+  const coordinator = await initializedCoordinator()
+  await coordinator.commitScenario(await fixtureRequest())
+  const settledMemory = coordinator.diagnostics().memoryBytes
+  for (let revision = 2; revision <= 100; revision += 1) {
+    await coordinator.commitScenario(await fixtureRequest(revision))
+  }
+  assert.equal(coordinator.diagnostics().memoryBytes, settledMemory)
+})

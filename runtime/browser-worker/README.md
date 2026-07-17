@@ -71,9 +71,11 @@ runtime/browser-worker/
 The coordinator instantiates the independently built Environment and Physics
 Wasm modules, validates ABI revisions, transfers one field-sized Environment
 buffer, publishes progress at bounded cancellation points, rejects superseded
-work, and returns a copied coherent float product with memory accounting. The
-worker wrapper transfers product-buffer ownership to its caller and maps failures
-to stable categories.
+work, explicitly invalidates Wasm request/output views on success and failure,
+and returns a copied coherent float product with memory accounting. Repeated
+scenario tests verify stable linear-memory size after warm-up. The worker wrapper
+transfers product-buffer ownership to its caller and maps failures to stable
+categories.
 
 The implementation is deliberately fixture-sized. It does not fetch provider
 assets, manage production release handles/caches, run threads, or contain a

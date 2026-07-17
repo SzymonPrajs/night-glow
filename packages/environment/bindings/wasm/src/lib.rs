@@ -123,6 +123,19 @@ pub extern "C" fn nightglow_environment_summary_len() -> u32 {
     SUMMARY.with(|summary| u32::try_from(summary.borrow().len()).unwrap_or(0))
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn nightglow_environment_input_len() -> u32 {
+    INPUT.with(|input| u32::try_from(input.borrow().len()).unwrap_or(0))
+}
+
+/// Releases the current field and summary views. Wasm linear memory may retain
+/// capacity for reuse, but no completed request remains addressable.
+#[unsafe(no_mangle)]
+pub extern "C" fn nightglow_environment_release_buffers() {
+    INPUT.with(|input| input.borrow_mut().clear());
+    SUMMARY.with(|summary| summary.borrow_mut().clear());
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -172,5 +185,8 @@ mod tests {
         let pointer = nightglow_environment_summarize_fixture(4, 4, 3);
         assert_ne!(pointer, 0);
         SUMMARY.with(|summary| assert_eq!(&*summary.borrow(), &[70.0, 99_850.0]));
+        nightglow_environment_release_buffers();
+        assert_eq!(nightglow_environment_input_len(), 0);
+        assert_eq!(nightglow_environment_summary_len(), 0);
     }
 }

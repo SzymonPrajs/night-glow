@@ -35,6 +35,11 @@ export class Coordinator {
       this.#physics = physics.instance.exports
       requireExport(this.#environment, 'nightglow_environment_abi_revision')
       requireExport(this.#physics, 'nightglow_physics_abi_revision')
+      requireExport(this.#environment, 'nightglow_environment_input_len')
+      requireExport(this.#environment, 'nightglow_environment_summary_len')
+      requireExport(this.#environment, 'nightglow_environment_release_buffers')
+      requireExport(this.#physics, 'nightglow_first_slice_output_len')
+      requireExport(this.#physics, 'nightglow_physics_release_output')
       if (this.#environment.nightglow_environment_abi_revision() !== 1
         || this.#physics.nightglow_physics_abi_revision() !== 1) {
         throw new CoordinatorError('incompatible_schema', 'Unsupported Environment or Physics ABI')
@@ -54,6 +59,18 @@ export class Coordinator {
       transferableBuffers: true,
       wasmThreads: false,
       sharedArrayBuffer: typeof SharedArrayBuffer !== 'undefined' && globalThis.crossOriginIsolated === true,
+    }
+  }
+
+  diagnostics() {
+    if (!this.#environment || !this.#physics) {
+      throw new CoordinatorError('runtime_failure', 'Coordinator is not initialized')
+    }
+    return {
+      memoryBytes: this.#environment.memory.buffer.byteLength + this.#physics.memory.buffer.byteLength,
+      retainedEnvironmentInputValues: this.#environment.nightglow_environment_input_len(),
+      retainedEnvironmentSummaryValues: this.#environment.nightglow_environment_summary_len(),
+      retainedPhysicsOutputValues: this.#physics.nightglow_first_slice_output_len(),
     }
   }
 
@@ -130,29 +147,39 @@ export class Coordinator {
     ]
     const allocate = requireExport(this.#environment, 'nightglow_environment_input_allocate')
     const summarize = requireExport(this.#environment, 'nightglow_environment_summarize_fixture')
-    const pointer = allocate(values.length)
-    new Float64Array(this.#environment.memory.buffer, pointer, values.length).set(values)
-    const summaryPointer = summarize(
-      emission.j_dnb_nw_cm2_sr.length,
-      atmosphere.column_count,
-      atmosphere.geometric_height_m.length,
-    )
-    const summaryLength = this.#environment.nightglow_environment_summary_len()
-    if (!summaryPointer || summaryLength !== 2) {
-      throw new CoordinatorError('invalid_units_or_coordinates', 'Environment rejected the regional fixture buffer')
+    const release = requireExport(this.#environment, 'nightglow_environment_release_buffers')
+    try {
+      const pointer = allocate(values.length)
+      new Float64Array(this.#environment.memory.buffer, pointer, values.length).set(values)
+      const summaryPointer = summarize(
+        emission.j_dnb_nw_cm2_sr.length,
+        atmosphere.column_count,
+        atmosphere.geometric_height_m.length,
+      )
+      const summaryLength = this.#environment.nightglow_environment_summary_len()
+      if (!summaryPointer || summaryLength !== 2) {
+        throw new CoordinatorError('invalid_units_or_coordinates', 'Environment rejected the regional fixture buffer')
+      }
+      const summary = new Float64Array(this.#environment.memory.buffer, summaryPointer, summaryLength)
+      return { totalDirectionalIntensity: summary[0], meanSurfacePressure: summary[1] }
+    } finally {
+      release()
     }
-    const summary = new Float64Array(this.#environment.memory.buffer, summaryPointer, summaryLength)
-    return { totalDirectionalIntensity: summary[0], meanSurfacePressure: summary[1] }
   }
 
   #solvePhysics({ totalDirectionalIntensity, meanSurfacePressure }) {
     const solve = requireExport(this.#physics, 'nightglow_first_slice_solve')
-    const pointer = solve(totalDirectionalIntensity, meanSurfacePressure)
-    const length = this.#physics.nightglow_first_slice_output_len()
-    if (!pointer || length !== 24) {
-      throw new CoordinatorError('numerical_non_convergence', 'Physics did not publish a coherent product')
+    const release = requireExport(this.#physics, 'nightglow_physics_release_output')
+    try {
+      const pointer = solve(totalDirectionalIntensity, meanSurfacePressure)
+      const length = this.#physics.nightglow_first_slice_output_len()
+      if (!pointer || length !== 24) {
+        throw new CoordinatorError('numerical_non_convergence', 'Physics did not publish a coherent product')
+      }
+      return new Float32Array(this.#physics.memory.buffer, pointer, length).slice()
+    } finally {
+      release()
     }
-    return new Float32Array(this.#physics.memory.buffer, pointer, length).slice()
   }
 }
 

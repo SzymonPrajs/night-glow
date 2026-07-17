@@ -84,6 +84,12 @@ pub extern "C" fn nightglow_first_slice_output_len() -> u32 {
     OUTPUT.with(|output| u32::try_from(output.borrow().len()).unwrap_or(0))
 }
 
+/// Invalidates the current output view after the host has copied or uploaded it.
+#[unsafe(no_mangle)]
+pub extern "C" fn nightglow_physics_release_output() {
+    OUTPUT.with(|output| output.borrow_mut().clear());
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -93,5 +99,7 @@ mod tests {
         let pointer = nightglow_first_slice_solve(70.0, 99_850.0);
         assert_ne!(pointer, 0);
         assert_eq!(nightglow_first_slice_output_len(), 24);
+        nightglow_physics_release_output();
+        assert_eq!(nightglow_first_slice_output_len(), 0);
     }
 }

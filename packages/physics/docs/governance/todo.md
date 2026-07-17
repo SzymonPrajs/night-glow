@@ -103,8 +103,8 @@ Checkboxes are intentionally open. Creating this design does not resolve them.
 
 - [ ] Design coarse handle-based ABI and typed-array layouts.
 - [ ] Benchmark Environment regional atmosphere decode/interpolation, transfer to Physics, memory high-water and cancellation separately from the solve.
-- [ ] Prove native/Wasm parity on the same serialized fixture.
-- [ ] Implement single-worker baseline before optional shared-memory workers.
+- [x] Prove native/Wasm parity on the same serialized first-slice fixture; broader scientific fixtures remain phase-gated.
+- [x] Implement the single-worker first-slice baseline before optional shared-memory workers.
 - [ ] Measure copy versus transfer versus shared-memory costs.
 - [ ] Add revision-based cancellation, bounded yield points, progress with residuals, and memory reclamation.
 - [ ] Define browsers without SIMD/threads and memory-pressure recovery.
