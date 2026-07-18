@@ -141,6 +141,15 @@ a {
   color: var(--dim);
 }
 
+/* Preview pin rendered by the Globe engine outside the React tree. */
+.globePreviewPin {
+  width: 18px;
+  height: 18px;
+  border: 2px dashed var(--accent-strong);
+  border-radius: 50%;
+  box-shadow: 0 0 12px rgba(141, 200, 255, 0.55);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

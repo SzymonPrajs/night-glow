@@ -56,7 +56,8 @@ export default function InspectorSheet() {
 
   if (!inspectorOpen) return null
 
-  const { scenario, product, capabilities, stageTimings, failure, resolutions } = inspectorData ?? {}
+  const { scenario, product, capabilities, stageTimings, failure, resolutions, environmentDisplay } =
+    inspectorData ?? {}
 
   const download = () => {
     if (!scenario) return
@@ -109,8 +110,40 @@ export default function InspectorSheet() {
         </div>
         <div className={styles.sheetBody}>
           {inspectorTab === 'products' ? (
-            scenario ? (
-              <>
+            <>
+              {environmentDisplay ? (
+                <>
+                  <h3 className={styles.sectionTitle}>
+                    Environment display products ({environmentDisplay.schemaRevision})
+                  </h3>
+                  {environmentDisplay.products.map((displayProduct) => (
+                    <dl key={displayProduct.environment_display_product_id} className={styles.definitionList} style={{ marginBottom: 16 }}>
+                      <Definition term="Product">{displayProduct.environment_display_product_id}</Definition>
+                      <Definition term="Build revision">{displayProduct.environment_display_build_revision}</Definition>
+                      <Definition term="Source">{displayProduct.source_release_id}</Definition>
+                      <Definition term="Quantity">{displayProduct.quantity}</Definition>
+                      <Definition term="Unit">{displayProduct.unit}</Definition>
+                      <Definition term="Shape">
+                        {displayProduct.shape.join(' × ')} ({displayProduct.axis_order.join(' × ')})
+                      </Definition>
+                      {displayProduct.aggregation ? (
+                        <Definition term="Aggregation">{displayProduct.aggregation}</Definition>
+                      ) : null}
+                      {displayProduct.vertical_selection ? (
+                        <Definition term="Vertical selection">
+                          {displayProduct.vertical_selection.quantity} = {displayProduct.vertical_selection.value}{' '}
+                          {displayProduct.vertical_selection.unit}
+                        </Definition>
+                      ) : null}
+                      <Definition term="Validity">
+                        {displayProduct.data_validity.join(', ')}
+                      </Definition>
+                    </dl>
+                  ))}
+                </>
+              ) : null}
+              {scenario ? (
+                <>
                 <h3 className={styles.sectionTitle}>Scenario (revision {scenario.scenario_revision})</h3>
                 <pre className={styles.pre}>{JSON.stringify(scenario, null, 2)}</pre>
                 {product ? (
@@ -144,9 +177,11 @@ export default function InspectorSheet() {
                   </>
                 ) : null}
               </>
-            ) : (
-              <EmptyState>Nothing computed yet — commit a scenario from the Sky view first.</EmptyState>
-            )
+              ) : null}
+              {!scenario && !environmentDisplay ? (
+                <EmptyState>Nothing computed yet — commit a scenario from the Sky view first.</EmptyState>
+              ) : null}
+            </>
           ) : null}
 
           {inspectorTab === 'computation' ? (

@@ -8,7 +8,7 @@
   right: calc(12px + var(--safe-right));
   z-index: 40;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: var(--space-2);
   padding: 8px 10px;
@@ -81,6 +81,8 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .textInput {
@@ -90,7 +92,9 @@
   color: var(--text);
   padding: 7px 10px;
   min-height: 36px;
-  min-width: 150px;
+  min-width: 90px;
+  width: 160px;
+  max-width: 100%;
 }
 
 .textInput::placeholder {
@@ -140,6 +144,7 @@
   align-items: center;
   gap: 6px;
   flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .pill {
@@ -153,6 +158,9 @@
   padding: 5px 10px;
   min-height: 28px;
   white-space: nowrap;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .pillRuntime {
@@ -362,6 +370,10 @@
 }
 
 @media (max-width: 720px) {
+  .topbar {
+    flex-wrap: wrap;
+  }
+
   .sheet {
     top: auto;
     left: 0;

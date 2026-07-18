@@ -1,0 +1,337 @@
+/* Globe view: full-bleed map with a floating layer dock and place card. */
+
+.view {
+  position: fixed;
+  inset: 0;
+}
+
+.map {
+  position: absolute;
+  inset: 0;
+}
+
+.map canvas {
+  outline: none;
+}
+
+.dock {
+  position: absolute;
+  top: 76px;
+  right: calc(12px + var(--safe-right));
+  z-index: 10;
+  width: 300px;
+  max-height: calc(100dvh - 100px);
+  overflow: auto;
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+.dockTitle {
+  margin: 0 0 var(--space-2);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.layerList {
+  display: grid;
+  gap: 6px;
+}
+
+.layerRow {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  color: var(--text);
+  text-align: left;
+  min-height: 40px;
+}
+
+.layerRow:hover {
+  border-color: var(--line-strong);
+}
+
+.layerRowActive {
+  border-color: var(--accent);
+  background: rgba(141, 200, 255, 0.1);
+}
+
+.domainBadge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 999px;
+}
+
+.domainEmission {
+  color: var(--amber);
+  background: rgba(240, 178, 105, 0.12);
+}
+
+.domainAtmosphere {
+  color: var(--accent-strong);
+  background: rgba(141, 200, 255, 0.12);
+}
+
+.layerName {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.layerUnit {
+  color: var(--faint);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.legend {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+
+.legendTitle {
+  margin: 0;
+  font-size: 13px;
+}
+
+.legendDescription {
+  margin: 2px 0 var(--space-2);
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.legendRamp {
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+
+.legendScale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.legendNote {
+  margin: var(--space-2) 0 0;
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.toggles {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.toggleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12px;
+  min-height: 32px;
+  cursor: pointer;
+}
+
+.toggleHint {
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.timeNote {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: 11px;
+  color: var(--warn);
+  background: rgba(255, 196, 107, 0.08);
+  border: 1px solid rgba(255, 196, 107, 0.3);
+}
+
+.placeCard {
+  position: absolute;
+  z-index: 20;
+  width: 320px;
+  max-width: calc(100vw - 24px);
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--surface-strong);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  transform: translate(14px, 14px);
+}
+
+.placeCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.placeCardTitle {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.placeCardClose {
+  border: 0;
+  background: transparent;
+  color: var(--dim);
+  font-size: 18px;
+  line-height: 1;
+  padding: 4px 8px;
+  min-width: 32px;
+  min-height: 32px;
+}
+
+.placeCardClose:hover {
+  color: var(--text);
+}
+
+.placeCardCoords {
+  margin: var(--space-2) 0 0;
+  font-size: 13px;
+  color: var(--accent-strong);
+}
+
+.placeCardQuantity {
+  margin: 2px 0 var(--space-2);
+  font-size: 11px;
+  color: var(--dim);
+  word-break: break-word;
+}
+
+.placeCardList {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px var(--space-3);
+  margin: 0;
+  font-size: 12px;
+}
+
+.placeCardList dt {
+  color: var(--faint);
+}
+
+.placeCardList dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+.placeCardActions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.enterSky {
+  flex: 1;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 8px 12px;
+  min-height: 40px;
+}
+
+.secondaryAction {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  color: var(--text);
+  font-size: 13px;
+  padding: 8px 12px;
+  min-height: 40px;
+}
+
+.loadError {
+  position: absolute;
+  left: calc(12px + var(--safe-left));
+  bottom: calc(12px + var(--safe-bottom));
+  z-index: 30;
+  max-width: 420px;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  color: var(--danger);
+  background: var(--surface-strong);
+  border: 1px solid rgba(255, 141, 122, 0.4);
+}
+
+.staticWrap {
+  height: 100dvh;
+  overflow: auto;
+  padding: calc(96px + var(--safe-top)) var(--space-5) var(--space-5);
+}
+
+.staticNote {
+  color: var(--dim);
+  font-size: 13px;
+}
+
+.staticTable {
+  border-collapse: collapse;
+  width: 100%;
+  max-width: 720px;
+  font-size: 13px;
+}
+
+.staticTable th,
+.staticTable td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.staticTable th {
+  color: var(--dim);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 720px) {
+  .dock {
+    top: auto;
+    left: calc(12px + var(--safe-left));
+    right: calc(12px + var(--safe-right));
+    bottom: calc(12px + var(--safe-bottom));
+    width: auto;
+    max-height: 45dvh;
+  }
+
+  .placeCard {
+    left: 12px !important;
+    right: 12px;
+    top: auto !important;
+    bottom: calc(12px + var(--safe-bottom));
+    width: auto;
+    transform: none;
+  }
+}

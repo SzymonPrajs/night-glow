@@ -8,6 +8,7 @@ import { createContext, useCallback, useContext, useMemo, useState } from 'react
 import type { ReactNode } from 'react'
 import type {
   CoordinatorCapabilities,
+  EnvironmentDisplayProduct,
   FailureInfo,
   ObserverRenderProduct,
   ObserverScenario,
@@ -29,6 +30,11 @@ export interface ResolutionReport {
   canvas: string
 }
 
+export interface EnvironmentDisplayReport {
+  schemaRevision: string
+  products: EnvironmentDisplayProduct[]
+}
+
 export interface InspectorData {
   scenario?: ObserverScenario
   product?: ObserverRenderProduct | null
@@ -36,6 +42,7 @@ export interface InspectorData {
   stageTimings?: Partial<Record<ProgressStage, number>>
   failure?: FailureInfo | null
   resolutions?: ResolutionReport
+  environmentDisplay?: EnvironmentDisplayReport
 }
 
 interface AppState {
