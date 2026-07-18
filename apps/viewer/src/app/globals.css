@@ -150,6 +150,16 @@ a {
   box-shadow: 0 0 12px rgba(141, 200, 255, 0.55);
 }
 
+/* Committed-place pin rendered by the Sky MiniMap outside the React tree. */
+.miniMapCommittedPin {
+  width: 12px;
+  height: 12px;
+  background: var(--accent-strong);
+  border: 2px solid rgba(9, 14, 24, 0.9);
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(141, 200, 255, 0.5);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
