@@ -5,6 +5,8 @@ REFERENCE_APP := apps/reference-viewer
 PRODUCTION_APP := apps/viewer
 VIEWER_PROOF := apps/viewer/experiments/runtime
 WEB_APP := $(if $(wildcard $(PRODUCTION_APP)/package.json),$(PRODUCTION_APP),$(REFERENCE_APP))
+# Vite (reference viewer) uses --host; Next.js (production Viewer) uses --hostname.
+WEB_HOST_FLAG := $(if $(filter $(PRODUCTION_APP),$(WEB_APP)),--hostname 0.0.0.0,--host 0.0.0.0)
 WEB_LOCK := $(WEB_APP)/package-lock.json
 WEB_DEPS := $(WEB_APP)/node_modules/.package-lock.json
 VIEWER_PROOF_LOCK := $(VIEWER_PROOF)/package-lock.json
@@ -52,21 +54,24 @@ $(WEB_DEPS): $(WEB_LOCK)
 
 web-dev: $(WEB_DEPS) ## Start the active website development server.
 	@echo "Starting $(WEB_APP)"
-	@npm --prefix "$(WEB_APP)" run dev -- --host 0.0.0.0
+	@npm --prefix "$(WEB_APP)" run dev -- $(WEB_HOST_FLAG)
 
 web-build: $(WEB_DEPS) ## Build the active website for production.
 	@echo "Building $(WEB_APP)"
 	@npm --prefix "$(WEB_APP)" run build
 
 web-preview: $(WEB_DEPS) ## Serve the active website's production build locally.
-	@npm --prefix "$(WEB_APP)" run preview -- --host 0.0.0.0
+	@npm --prefix "$(WEB_APP)" run preview -- $(WEB_HOST_FLAG)
 
 web-lint: $(WEB_DEPS) ## Lint the active website.
 	@npm --prefix "$(WEB_APP)" run lint
 
-web-test: $(WEB_DEPS) ## Run the deterministic reference model verification.
-	@npm --prefix "$(WEB_APP)" run test:physics
+web-test: $(WEB_DEPS) ## Run the deterministic reference model and Viewer unit verification.
+	@npm --prefix "$(REFERENCE_APP)" run test:physics
 	@npm --prefix "$(REFERENCE_APP)" run test:astronomy
+ifneq ($(WEB_APP),$(REFERENCE_APP))
+	@npm --prefix "$(WEB_APP)" run test:unit
+endif
 
 viewer-proof-install: $(VIEWER_PROOF_DEPS) ## Install locked dependencies for the M1 Viewer runtime proof.
 

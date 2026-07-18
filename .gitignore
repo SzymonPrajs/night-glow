@@ -17,3 +17,14 @@ data/staging/
 data/generated/
 data/cache/
 artifacts/
+
+# Production Viewer assets synced from upstream sources (apps/viewer/scripts/sync-assets.mjs)
+apps/viewer/public/fixtures/
+apps/viewer/public/workers/
+apps/viewer/public/wasm/
+apps/viewer/public/fixtures/
+apps/viewer/public/workers/
+apps/viewer/public/wasm/
+apps/viewer/.next/
+apps/viewer/node_modules/
+apps/viewer/out/
