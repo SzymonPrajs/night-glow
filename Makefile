@@ -15,6 +15,7 @@ VIEWER_PROOF_DEPS := $(VIEWER_PROOF)/node_modules/.package-lock.json
 .PHONY: help doctor setup clean clean-all install dev preview build check lint test \
 	web-install web-dev web-preview web-build web-lint web-test \
 	viewer-proof-install viewer-proof-build viewer-proof-lint viewer-proof-test \
+	viewer-e2e-test \
 	rust-prepare rust-format-check rust-check rust-test rust-build rust-wasm native-probe wasm-probe coordinator-test docs-check contract-check reproducibility-check non-ui-check \
 	db-status db-migrate deploy-preview deploy-production
 
@@ -44,7 +45,7 @@ check: docs-check contract-check reproducibility-check web-lint web-build viewer
 
 lint: web-lint docs-check ## Check web source and documentation links.
 
-test: contract-check web-test rust-test native-probe wasm-probe coordinator-test viewer-proof-test ## Run deterministic model, parity, and bounded browser checks.
+test: contract-check web-test rust-test native-probe wasm-probe coordinator-test viewer-proof-test viewer-e2e-test ## Run deterministic model, parity, and bounded browser checks.
 
 web-install: $(WEB_DEPS) ## Install the active website's locked Node dependencies.
 
@@ -88,6 +89,11 @@ viewer-proof-lint: $(VIEWER_PROOF_DEPS) ## Lint the bounded Next.js Viewer runti
 viewer-proof-test: viewer-proof-build $(WEB_DEPS) ## Browser-check the route, MapLibre, WebGL2, and bundle boundaries.
 	@npm --prefix "$(REFERENCE_APP)" run test:m1-browser
 	@npm --prefix "$(REFERENCE_APP)" run test:m1-runtime
+
+viewer-e2e-test: web-build ## Run the production Viewer's Playwright smoke suite against the built app.
+ifneq ($(WEB_APP),$(REFERENCE_APP))
+	@npm --prefix "$(WEB_APP)" run test:e2e
+endif
 
 docs-check: ## Verify every repository-local Markdown link.
 	@node tools/check-links.mjs
