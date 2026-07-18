@@ -12,8 +12,8 @@ remain gated work.
 ```text
 Night Glow/
 ├── apps/
-│   ├── viewer/             production two-view application plan
-│   └── reference-viewer/   runnable TypeScript/Vite baseline
+│   ├── viewer/             production two-view application (fixture slice)
+│   └── reference-viewer/   runnable TypeScript/Vite behavioral baseline
 ├── packages/
 │   ├── contracts/          canonical cross-package vocabulary and protocols
 │   ├── environment/        Rust environment reconstruction and Wasm decoding
@@ -60,14 +60,16 @@ and cancellable.
   observer products.
 - [Coordinator worker](runtime/browser-worker/README.md) — browser/Wasm scheduling and
   memory boundary.
-- [Viewer](apps/viewer/README.md) — production globe and observer application plan.
-- [Reference viewer](apps/reference-viewer/README.md) — existing runnable baseline.
+- [Viewer](apps/viewer/README.md) — production globe and sky application.
+- [Reference viewer](apps/reference-viewer/README.md) — runnable behavioral baseline.
 - [Data policy](data/README.md) and [tooling boundary](tools/README.md).
 
-## Run the reference viewer
+## Run the viewers
 
 ```bash
-cd apps/reference-viewer
+make dev                          # production Viewer (apps/viewer, Next.js)
+
+cd apps/reference-viewer          # or the behavioral baseline (Vite)
 npm ci
 npm run dev
 ```
@@ -82,7 +84,7 @@ make setup              # verify tools, install locked web dependencies, prepare
 make dev                # launch the currently implemented website
 make build              # build implemented web, native Rust, and Wasm targets
 make check              # links, lint, web build, Rust checks, database status
-make test               # deterministic reference-model verification
+make test               # deterministic model, parity, and bounded browser checks
 make db-migrate         # safe no-op until a database is introduced
 make deploy-preview     # validated Vercel preview
 make deploy-production  # validated Vercel production deployment
@@ -90,10 +92,11 @@ make clean              # generated build output
 make clean-all          # build output plus installed Node dependencies
 ```
 
-Web commands intentionally target the runnable reference viewer until the
-production Viewer exists. The bounded Next.js runtime proof under
-`apps/viewer/experiments/runtime/` is built separately and is not the production
-application. Deployment uses Vercel's documented `--cwd` flow and requires an
+Web commands target the production Viewer (`apps/viewer`), which is
+implemented as a synthetic contract fixture slice: the full shell and both
+views run against one small pinned fixture, and requests outside it fail
+closed. The reference viewer remains installed and runnable as the behavioral
+baseline. Deployment uses Vercel's documented `--cwd` flow and requires an
 authenticated CLI; credentials are never stored here.
 
 The repo-local Codex environment is

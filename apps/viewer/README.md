@@ -1,30 +1,65 @@
-# Night Glow Viewer — design workspace
+# Night Glow Viewer
 
-This folder defines the application that presents Night Glow's scientific products. It is a documentation-first project: no new viewer implementation should begin until the routes, ownership boundaries, data contracts, performance budgets, and migration gates described here have been reviewed.
+The production application that presents Night Glow's scientific products: a
+Next.js (App Router) + React + TypeScript shell with two first-class views.
+
+1. **Globe** (`/globe`) — inspect light emitted from Earth's surface (and later
+   other pollution layers) at planetary-to-local scales. MapLibre globe with
+   typed cell layers built from Environment display products, a layer dock with
+   legends, and a place card that leads into the sky.
+2. **Sky** (`/observe`) — the physically rendered sky at a selected place and
+   time. A raw-WebGL2 renderer samples the observer render product; scenario
+   commits run through the coordinator worker with staged progress, retain the
+   previous coherent sky on failure, and fail closed rather than fabricate a
+   sky. A mini-map handles local relocation; exposure and enhance controls are
+   explicitly display-only and never rerun physics.
 
 ## Current status
 
-The production Viewer is intentionally unimplemented. Bounded experiments under
-`experiments/` prove Next.js route separation, MapLibre/WebGL2 startup and the
-worker-to-HDR-upload lifecycle, while the existing Vite reference viewer remains
-the runnable product baseline. Those experiments are feasibility evidence, not a
-production UI. The scientific packages and coordinator have completed a synthetic
-non-UI vertical slice; see the repository
+The Viewer is implemented as a **synthetic contract fixture slice**: every
+surface is wired to the real contracts, coordinator protocol, and Wasm worker,
+but the scientific inputs are one small synthetic fixture — one atmosphere
+state (`standard scenario`, one valid time `2024-01-15T00:00:00Z`), a coarse
+emission grid, and a tiny render product. Requests outside the fixture fail
+closed with an explicit reason and a recovery path. Nothing here is a
+calibrated sky prediction yet; see the repository
 [implementation status](../../implementation/STATUS.md).
 
-The product has two first-class views:
+The bounded feasibility experiments under `experiments/` remain as design
+evidence only; they are not part of the application. The Vite
+[reference viewer](../reference-viewer/README.md) remains runnable as the
+behavioral baseline but is no longer what `make dev` serves.
 
-1. **Globe** — inspect light emitted from Earth's surface, then later other pollution layers, at planetary-to-local scales.
-2. **Observer** — enter the physically rendered sky at a selected place and time, with a small map for local relocation.
+## Run it
 
-The Viewer is independent from both scientific projects:
+```bash
+make setup            # once: installs dependencies and builds the Rust crates
+make rust-wasm        # once: builds the Environment/Physics Wasm modules
+make dev              # serves this app (Next.js) — /globe and /observe
+make viewer-e2e-test  # Playwright smoke suite against the built app
+```
 
-- [Environment](../../packages/environment/README.md) reconstructs independently versioned calibrated surface-emission and four-dimensional atmospheric-state releases.
-- [Physics](../../packages/physics/README.md) computes astronomy, atmospheric transport, celestial illumination, PSF products, and observer-space radiance.
-- [The coordinator worker](../../runtime/browser-worker/README.md) owns asynchronous Wasm scheduling and buffer lifetime.
-- `apps/viewer/` owns interaction, navigation, GPU resource lifetime, display transforms, accessibility, and deployment. It owns no scientific law.
+The Sky view loads Environment/Physics Wasm through the coordinator worker;
+`make rust-wasm` must have run at least once (it is also part of
+`make build`). Without the Wasm artifacts the view fails closed with a
+`missing_asset` explanation instead of a sky.
 
-## Start here
+## Ownership
+
+- [Environment](../../packages/environment/README.md) reconstructs
+  independently versioned calibrated surface-emission and four-dimensional
+  atmospheric-state releases.
+- [Physics](../../packages/physics/README.md) computes astronomy, atmospheric
+  transport, celestial illumination, PSF products, and observer-space radiance.
+- [The coordinator worker](../../runtime/browser-worker/README.md) owns
+  asynchronous Wasm scheduling and buffer lifetime.
+- `apps/viewer/` owns interaction, navigation, GPU resource lifetime, display
+  transforms, accessibility, and deployment. It owns no scientific law, and it
+  never recomputes physics for display-only changes.
+
+## Design documents
+
+The direction below was settled before implementation and still governs it:
 
 1. [Unified system contract](../../packages/contracts/README.md) — canonical products, scenario, evidence, lifecycle and revisions.
 2. [Architecture](docs/architecture/overview.md) — application, renderer, worker, and ownership boundaries.
@@ -42,7 +77,7 @@ The Viewer is independent from both scientific projects:
 - Build a new application shell rather than expanding the current single-screen component tree.
 - Use Next.js App Router, React, and TypeScript for the application layer, with the two GPU experiences as dynamically loaded client-only routes.
 - Use MapLibre GL JS for the globe and mini-map; use a custom WebGL layer for calibrated emission display.
-- Use an imperative Three.js/WebGL2 renderer for the observer sky, isolated from React.
+- Use an imperative WebGL2 renderer for the observer sky, isolated from React.
 - Run Environment decoding and Physics Wasm through the separate coordinator-worker package. Cross the JavaScript/Wasm boundary with coarse, versioned messages and transferable buffers.
 - Keep only one full-rate GPU view active. A transition may prewarm the destination, but it must not leave two unconstrained render loops alive.
 - Keep scientific radiance separate from exposure, palette, tone mapping, and artistic presentation.
@@ -50,24 +85,25 @@ The Viewer is independent from both scientific projects:
 - Store shareable scientific state in the URL and internal renderer state outside React.
 - Deploy the application shell on Vercel; serve large immutable scientific releases and tiles from CDN/object storage, never through request-time functions.
 
-## Proposed project boundary
+## Project boundary
 
 ```text
 apps/viewer/
-├── app/                 future Next.js routes and layouts
-├── components/          future accessible product controls
-├── engines/
-│   ├── globe/           MapLibre adapter and custom layers
-│   └── observer/        imperative Three.js/WebGL2 engine
-├── runtime/             thin client for runtime/browser-worker; no scientific modules
-├── state/               URL and low-frequency product state
-├── docs/
-│   ├── product/         globe, observer, and end-to-end experience
-│   ├── architecture/    data, state, rendering, worker, and performance boundaries
-│   ├── delivery/        migration, validation, roadmap, TODO, and Vercel
-│   ├── decisions/       application architecture decisions
-│   └── research/        bounded framework and rendering investigations
-└── tests/               future interaction, visual, and contract tests
+├── src/
+│   ├── app/               Next.js routes: /globe, /observe, /about, /methodology
+│   ├── components/
+│   │   ├── shell/         top bar, mode switch, status pills, inspector, sharing
+│   │   ├── globe/         MapLibre globe engine, layer dock, place card
+│   │   └── observe/       WebGL2 sky engine, time bar, display controls, mini-map
+│   └── lib/
+│       ├── contracts/     contract types mirrored from packages/contracts
+│       ├── fixtures/      synthetic fixture client (the slice's only data source)
+│       ├── scenario/      URL state and scenario identity
+│       ├── status/        runtime/science status model
+│       └── worker/        thin coordinator-worker client; no scientific modules
+├── public/                synced Wasm and fixture assets (generated, uncommitted)
+├── scripts/               asset sync for dev/build
+├── tests/                 unit tests plus the Playwright e2e smoke suite
+├── docs/                  product, architecture, delivery, decisions, research
+└── experiments/           bounded feasibility evidence (not part of the app)
 ```
-
-That tree is a proposed implementation boundary, not permission to create placeholder code. This phase should end in reviewable decisions and small feasibility experiments.

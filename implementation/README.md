@@ -17,9 +17,9 @@ same architecture to global data and high-fidelity browser rendering.
 | Item | State |
 | --- | --- |
 | Current milestone | M1 — bounded feasibility proofs |
-| Completed system work | M0 and synthetic-contract M2 complete; non-UI M3 slice complete |
-| Next system gate | close real-data and curved-Earth reference-transfer evidence; production Viewer/deployment remain separate later gates |
-| Running product | existing TypeScript/Vite reference viewer remains the baseline; bounded Next runtime proof is not production UI |
+| Completed system work | M0 and synthetic-contract M2 complete; M3 fixture slice complete including both production Viewer modes |
+| Next system gate | close real-data and curved-Earth reference-transfer evidence; Viewer v1 and deployment remain separate later gates |
+| Running product | production Viewer (Next.js) serves the synthetic fixture slice; the TypeScript/Vite reference viewer remains the behavioral baseline |
 | Implemented architecture | typed contracts, both Rust workspaces, native probes, dual Wasm modules and coordinator lifecycle |
 | Rust implementation | synthetic Environment-to-Physics vertical slice implemented and validated; real-data and production-fidelity gates remain open |
 | Production deployment | not started |
@@ -180,7 +180,7 @@ does not waive the open real-data and reference-transfer evidence in M1.
 
 ## M3 — First end-to-end vertical slice
 
-State: **active** (non-UI slice complete; two production Viewer tasks remain open)
+State: **complete** (synthetic fixture slice, including both production Viewer modes)
 
 - [x] Produce one tiny `EmissionRelease`, one `AtmosphereFieldRelease`, their
   independent `EnvironmentDisplayProduct` derivatives and one Physics-owned
@@ -193,16 +193,19 @@ State: **active** (non-UI slice complete; two production Viewer tasks remain ope
   solve.
 - [x] Return a coherent `ObserverRenderProductSet` through the coordinator worker
   with progress, cancellation, stale-result rejection and structured failures.
-- [ ] Display the Environment products on the globe, enter the observer view from
+- [x] Display the Environment products on the globe, enter the observer view from
   a pin and render the linear HDR Physics result through WebGL2.
-- [ ] Demonstrate that exposure/palette changes do not rerun Physics and that a
+- [x] Demonstrate that exposure/palette changes do not rerun Physics and that a
   scientific scenario change does.
 - [x] Preserve a reproducible scenario/result report with all dependency IDs and
   separate source, state, numerical and display errors.
 
 The executed non-UI slice and its deliberate scientific limitations are recorded
 in [the M3 non-UI fixture-slice report](evidence/m3-non-ui-fixture-slice.md). The
-two Viewer tasks above remain intentionally unimplemented.
+two Viewer tasks are implemented in `apps/viewer/` over the same fixture slice
+and verified by the Playwright smoke suite (`make viewer-e2e-test`): globe pick
+to sky navigation, stale-result retention with recovery, display-only controls
+that never rerun Physics, and scenario changes that do.
 
 Gate: one small scenario works from immutable input products to both Viewer modes
 without bypassing a planned contract or duplicating physics.

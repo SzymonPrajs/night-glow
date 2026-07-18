@@ -14,7 +14,7 @@ executed measurements and limitations.
 | Environment | typed Rust workspace, immutable emission/atmosphere fixture decoders, conservative `J_DNB` support integration, contiguous queries, synthetic Black Marble C2 and ERA5/CAMS/MERRA-2 metadata normalizers, deterministic native precompute probe, field-sized Wasm adapter | real provider-file retrieval/decoding, regional reconstruction, fusion, calibrated uncertainty, chunk publication and global releases |
 | Physics | typed scenario/data/terrain products, independent complete-fixture Environment adapter, deterministic solver DAG, analytic flat and spherical atmosphere primitives, native precompute probe, libRadtran pure-absorption comparison, native/Wasm parity | production astronomy, spectral molecular/aerosol/cloud closure, externally validated curved-Earth scattering, terrain/surface coupling, complete sources, PSF and calibrated observations |
 | Browser worker | independently compiled Environment and Physics Wasm modules, immutable compatibility manifest, structured failures, cancellation, coherent publication, buffer release, runtime disposal and bounded-memory tests | production release/chunk caches, progressive refinement, measured transfer tiers, optional SIMD/threads/shared memory and device recovery |
-| Viewer | existing Vite reference viewer remains runnable; bounded Next/MapLibre/WebGL2 runtime experiments exist | production Viewer application and all user-facing integration; this was intentionally outside the non-UI implementation slice |
+| Viewer | production Next.js Viewer implemented over the synthetic fixture slice: application shell, MapLibre globe over Environment display products, WebGL2 sky over the coordinator's linear render product, fail-closed state machine with stale-result retention, inspector provenance, Playwright smoke suite; Vite reference viewer remains runnable as the behavioral baseline | real-data product integration, tile/CDN delivery, device tiers, accessibility audit, visual polish beyond the fixture slice |
 | Deployment | local build and safe adapters | authenticated Vercel preview/production evidence, CDN/object-storage selection, headers, rollback and observability |
 
 ## Completed system slices
@@ -23,10 +23,11 @@ executed measurements and limitations.
   conventions and measurable acceptance targets are frozen.
 - **M2 is complete for the synthetic contract slice:** both Rust workspaces,
   language-neutral contracts, native/Wasm builds and conformance tooling exist.
-- **The non-UI portion of M3 is complete:** one immutable scenario runs from
-  independent Environment releases through Physics and the coordinator to a
-  coherent transferable `2 x 4 x 3` linear-radiance product. The two production
-  Viewer tasks remain open, so M3 as a whole is not complete.
+- **M3 is complete for the synthetic fixture slice:** one immutable scenario runs
+  from independent Environment releases through Physics and the coordinator to a
+  coherent transferable `2 x 4 x 3` linear-radiance product, and the production
+  Viewer displays it in both modes (globe and sky) with display-only controls
+  that never rerun Physics. Real-data integration remains outside the slice.
 - **M1 remains active:** its software-boundary proofs passed, while real-data,
   curved-Earth reference-transfer and production delivery proofs remain open.
 
@@ -52,6 +53,11 @@ this status was merged. The recorded non-UI checkpoint includes:
 - stable Wasm memory across 100 repeated scenarios, fail-closed identity checks,
   cancellation, explicit buffer release, complete runtime disposal, and
   non-finite/overflowing `f32` output rejection.
+
+The production Viewer checkpoint adds 25 unit tests and a six-case Playwright
+smoke suite (`make viewer-e2e-test`) covering globe-to-sky navigation,
+fail-closed recovery, stale-result retention, display-only controls, mini-map
+relocation, and inspector provenance — each asserting a clean browser console.
 
 These figures validate the bounded fixture architecture, not a calibrated sky
 prediction.
@@ -85,6 +91,7 @@ being silently hidden.
 ## Explicit non-claims
 
 There is no real provider-derived Environment release, production radiative-
-transfer solver, calibrated all-sky prediction, production Viewer, global data
-publication, or production deployment yet. Synthetic fixtures are labelled as
+transfer solver, calibrated all-sky prediction, real-data Viewer integration,
+global data publication, or production deployment yet. The production Viewer
+exists only over the synthetic fixture slice; synthetic fixtures are labelled as
 such and do not close those gates.
